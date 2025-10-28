@@ -7,7 +7,7 @@ import useStore from '../../../store/useStore';
 interface UseManualChapterParserProps {
   currentProject: Project | null;
   characters: Character[];
-  onAddCharacter: (character: Character) => Character;
+  onAddCharacter: (character: Pick<Character, 'name' | 'color' | 'textColor' | 'description'>) => Character;
   applyUndoableProjectUpdate: (updater: (prevProject: Project) => Project) => void;
   setMultiSelectedChapterIdsAfterProcessing: (ids: string[]) => void;
 }

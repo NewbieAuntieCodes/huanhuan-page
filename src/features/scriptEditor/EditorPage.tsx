@@ -35,7 +35,7 @@ interface EditorPageProps {
   allCvNames: string[];
   cvStyles: CVStylesMap;
   onProjectUpdate: (project: Project) => void;
-  onAddCharacter: (character: Character) => Character;
+  onAddCharacter: (characterData: Pick<Character, 'name' | 'color' | 'textColor' | 'cvName' | 'description' | 'isStyleLockedToCv'>, projectId: string) => Character;
   onDeleteCharacter: (characterId: string) => void;
   onDeleteChapters: (chapterIds: string[], undoableDelete: () => void) => void;
   onUpdateCharacterCV: (characterId: string, cvName: string, cvBgColor: string, cvTextColor: string) => Promise<void>;
@@ -60,6 +60,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     onUpdateCharacterCV,
     onToggleCharacterStyleLock,
     onBulkUpdateCharacterStylesForCV,
+    onNavigateToDashboard,
     onOpenCharacterAndCvStyleModal,
     onEditCharacter,
   } = props;
@@ -80,6 +81,16 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
   
   const scriptImportInputRef = useRef<HTMLInputElement>(null);
 
+  const projectCharacters = useMemo(() => {
+    return characters.filter(c => !c.projectId || c.projectId === projectId);
+  }, [characters, projectId]);
+  
+  const handleAddCharacterForProject = useCallback((
+    charData: Pick<Character, 'name' | 'color' | 'textColor' | 'cvName' | 'description' | 'isStyleLockedToCv'>
+  ) => {
+    return onAddCharacter(charData, projectId);
+  }, [onAddCharacter, projectId]);
+
 
   const setMultiSelectedChapterIdsAfterProcessing = useCallback((ids: string[]) => {
       setMultiSelectedChapterIds(ids);
@@ -87,15 +98,15 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
 
   const { isLoadingAiAnnotation, handleRunAiAnnotationForChapters } = useAiChapterAnnotator({
     currentProject,
-    onAddCharacter,
+    onAddCharacter: handleAddCharacterForProject,
     applyUndoableProjectUpdate,
     setMultiSelectedChapterIdsAfterProcessing,
   });
 
   const { isLoadingManualParse, handleManualParseChapters } = useManualChapterParser({
     currentProject,
-    characters,
-    onAddCharacter,
+    characters: projectCharacters,
+    onAddCharacter: handleAddCharacterForProject,
     applyUndoableProjectUpdate,
     setMultiSelectedChapterIdsAfterProcessing,
   });
@@ -108,7 +119,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     handleImportPreAnnotatedScript,
   } = useAnnotationImporter({
     currentProject,
-    onAddCharacter,
+    onAddCharacter: handleAddCharacterForProject,
     applyUndoableProjectUpdate,
     selectedChapterId,
     multiSelectedChapterIds,
@@ -135,7 +146,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     handleMergeAdjacentLines,
   } = useScriptLineEditor(
     currentProject,
-    characters,
+    projectCharacters,
     applyUndoableProjectUpdate,
     selectedChapterId
   );
@@ -144,7 +155,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     characterForSidePanel,
     handleOpenCharacterSidePanel,
     handleCloseCharacterSidePanel,
-  } = useCharacterSidePanel(characters);
+  } = useCharacterSidePanel(projectCharacters);
   
   const [isAddChaptersModalOpen, setIsAddChaptersModalOpen] = React.useState(false);
 
@@ -187,16 +198,16 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
             if ((isHtmlLike && fileNameLower.endsWith('.docx')) || (!isZipLike && fileNameLower.endsWith('.docx'))) {
                 // Handle app-exported HTML "docx" and other non-zip .docx as HTML
                 const htmlString = await file.text();
-                parsedResult = parseHtmlWorkbook(htmlString, onAddCharacter);
+                parsedResult = parseHtmlWorkbook(htmlString, handleAddCharacterForProject);
             } else if (isZipLike && fileNameLower.endsWith('.docx')) {
                 // Handle real docx with mammoth
                 const arrayBuffer = await file.arrayBuffer();
                 const result = await mammoth.extractRawText({ arrayBuffer });
-                parsedResult = parseImportedScriptToChapters(result.value, onAddCharacter);
+                parsedResult = parseImportedScriptToChapters(result.value, handleAddCharacterForProject);
             } else if (fileNameLower.endsWith('.txt')) {
                 // Handle txt file
                 const rawText = await file.text();
-                parsedResult = parseImportedScriptToChapters(rawText, onAddCharacter);
+                parsedResult = parseImportedScriptToChapters(rawText, handleAddCharacterForProject);
             } else {
                 alert("不支持的文件格式或文件内容无法识别。请上传 .txt, .docx, 或由本应用导出的画本文件。");
                 return;
@@ -253,11 +264,11 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
         }
     };
     input.click();
-  }, [currentProject, selectedChapterId, applyUndoableProjectUpdate, onAddCharacter, onUpdateCharacterCV, onEditCharacter, cvStyles]);
+  }, [currentProject, selectedChapterId, applyUndoableProjectUpdate, handleAddCharacterForProject, onUpdateCharacterCV, onEditCharacter, cvStyles]);
   
 
   const handleSaveNewChapters = (pastedText: string) => {
-    const { newChapters } = parseImportedScriptToChapters(pastedText, onAddCharacter);
+    const { newChapters } = parseImportedScriptToChapters(pastedText, handleAddCharacterForProject);
     if (newChapters.length > 0) {
       applyUndoableProjectUpdate(prev => ({
         ...prev,
@@ -309,7 +320,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
 
   const contextValue = useMemo(() => ({
     ...coreLogic,
-    characters,
+    characters: projectCharacters,
     allCvNames,
     cvStyles,
     undoableProjectUpdate: applyUndoableProjectUpdate,
@@ -333,7 +344,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     cvFilter: coreLogic.cvFilter,
     setCvFilter: coreLogic.setCvFilter,
   }), [
-    coreLogic, characters, allCvNames, cvStyles, applyUndoableProjectUpdate, onDeleteChapters,
+    coreLogic, projectCharacters, allCvNames, cvStyles, applyUndoableProjectUpdate, onDeleteChapters,
     isLoadingAiAnnotation, isLoadingManualParse, isLoadingImportAnnotation,
     handleRunAiAnnotationForChapters, handleManualParseChapters, handleOpenImportModalTrigger,
     handleOpenCharacterSidePanel, onOpenCharacterAndCvStyleModal, handleOpenScriptImport

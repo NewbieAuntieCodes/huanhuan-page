@@ -5,7 +5,7 @@ import useStore from '../../../store/useStore';
 
 interface UseAnnotationImporterProps {
   currentProject: Project | null;
-  onAddCharacter: (character: Character) => Character;
+  onAddCharacter: (character: Pick<Character, 'name' | 'color' | 'textColor' | 'cvName' | 'description' | 'isStyleLockedToCv'>) => Character;
   applyUndoableProjectUpdate: (updater: (prevProject: Project) => Project) => void;
   selectedChapterId: string | null;
   multiSelectedChapterIds: string[];
@@ -78,7 +78,11 @@ export const useAnnotationImporter = ({
 
                     let character = Array.from(newCharacterMap.values()).find(c => c.name.toLowerCase() === charName.toLowerCase());
                     if (!character) {
-                        const existingInStore = useStore.getState().characters.find(c => c.name.toLowerCase() === charName.toLowerCase() && c.status !== 'merged');
+                        const existingInStore = useStore.getState().characters.find(c => 
+                            c.name.toLowerCase() === charName.toLowerCase() && 
+                            (!c.projectId || c.projectId === prevProject.id) &&
+                            c.status !== 'merged'
+                        );
                         if (existingInStore) {
                             character = existingInStore;
                         }
@@ -90,11 +94,12 @@ export const useAnnotationImporter = ({
                         const colorIndex = newCharacterMap.size % availableColors.length;
                         
                         character = onAddCharacter({
-                           id: '', 
                            name: charName, 
                            color: availableColors[colorIndex], 
                            textColor: availableTextColors[colorIndex],
                            cvName: cvName,
+                           description: '',
+                           isStyleLockedToCv: false
                         });
                         newCharacterMap.set(charName, character);
                     }

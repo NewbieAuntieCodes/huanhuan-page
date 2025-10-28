@@ -2,7 +2,7 @@ import { Character, Chapter, ScriptLine } from '../types';
 
 export const parseHtmlWorkbook = (
   htmlString: string,
-  onAddCharacter: (character: Character) => Character
+  onAddCharacter: (character: Pick<Character, 'name' | 'color' | 'textColor' | 'description' | 'cvName' | 'isStyleLockedToCv' | 'status'>) => Character
 ): { newChapters: Chapter[]; charactersWithCvToUpdate: Map<string, string>; characterDescriptions: Map<string, string> } => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlString, 'text/html');
@@ -42,7 +42,6 @@ export const parseHtmlWorkbook = (
     const colorIndex = tempCharacterMap.size % availableColors.length;
 
     const newChar = onAddCharacter({
-      id: '',
       name: charName,
       color: charName.toLowerCase() === 'narrator' ? 'bg-slate-500' : availableColors[colorIndex],
       textColor: charName.toLowerCase() === 'narrator' ? 'text-slate-100' : availableTextColors[colorIndex],

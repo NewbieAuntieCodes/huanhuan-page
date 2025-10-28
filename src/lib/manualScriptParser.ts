@@ -11,7 +11,7 @@ interface ParsedSegment {
 const getCharacterId = (
   name: string,
   existingCharacters: Character[],
-  addCharacterCallback: (character: Character) => Character,
+  addCharacterCallback: (character: Pick<Character, 'name' | 'color' | 'textColor' | 'description'>) => Character,
   tempCharMap: Map<string, Character>
 ): string => {
   const standardizedName = name.trim(); // Keep name as is, e.g., "待识别角色" or "Narrator"
@@ -30,8 +30,7 @@ const getCharacterId = (
   
   const UNKNOWN_SPEAKER_NAME_INTERNAL = "待识别角色"; // Use constant for "待识别角色"
 
-  const newCharData: Character = {
-    id: Date.now().toString() + "_char_manual_" + standardizedName + Math.random(),
+  const newCharData = {
     name: standardizedName,
     color: standardizedName === "Narrator" ? 'bg-slate-600' : (standardizedName === UNKNOWN_SPEAKER_NAME_INTERNAL ? 'bg-orange-400' : availableColors[colorIndex]),
     textColor: standardizedName === "Narrator" ? 'text-slate-100' : (standardizedName === UNKNOWN_SPEAKER_NAME_INTERNAL ? 'text-orange-900': 'text-white'),
@@ -45,7 +44,7 @@ const getCharacterId = (
 export const parseRawTextToScriptLinesByRules = (
   rawText: string,
   existingCharacters: Character[],
-  addCharacterCallback: (character: Character) => Character
+  addCharacterCallback: (character: Pick<Character, 'name' | 'color' | 'textColor' | 'description'>) => Character
 ): ScriptLine[] => {
   if (!rawText || rawText.trim() === "") return [];
 

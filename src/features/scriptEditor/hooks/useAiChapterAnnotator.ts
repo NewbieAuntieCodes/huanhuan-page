@@ -7,7 +7,7 @@ import useStore from '../../../store/useStore';
 
 interface UseAiChapterAnnotatorProps {
   currentProject: Project | null;
-  onAddCharacter: (character: Character) => Character;
+  onAddCharacter: (character: Pick<Character, 'name' | 'color' | 'textColor' | 'cvName' | 'description' | 'isStyleLockedToCv'>) => Character;
   applyUndoableProjectUpdate: (updater: (prevProject: Project) => Project) => void;
   setMultiSelectedChapterIdsAfterProcessing: (ids: string[]) => void;
 }

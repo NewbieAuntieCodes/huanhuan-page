@@ -2,7 +2,7 @@ import { Character, Chapter, ScriptLine } from '../types';
 
 export const parseImportedScriptToChapters = (
   rawText: string,
-  onAddCharacter: (character: Character) => Character
+  onAddCharacter: (character: Pick<Character, 'name' | 'color' | 'textColor' | 'description' | 'cvName' | 'isStyleLockedToCv' | 'status'>) => Character
 ): { newChapters: Chapter[]; charactersWithCvToUpdate: Map<string, string>; characterDescriptions: Map<string, string> } => {
   if (!rawText || !rawText.trim()) return { newChapters: [], charactersWithCvToUpdate: new Map(), characterDescriptions: new Map() };
 
@@ -47,7 +47,6 @@ export const parseImportedScriptToChapters = (
     const colorIndex = tempCharacterMap.size % availableColors.length;
 
     const newChar = onAddCharacter({
-      id: '', // The store's addCharacter will generate an ID
       name: charName,
       color: charName.toLowerCase() === 'narrator' ? 'bg-slate-500' : availableColors[colorIndex],
       textColor: charName.toLowerCase() === 'narrator' ? 'text-slate-100' : availableTextColors[colorIndex],

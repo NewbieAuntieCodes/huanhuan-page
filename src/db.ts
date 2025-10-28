@@ -34,7 +34,7 @@ db.version(1).stores({
 
 db.version(2).stores({
   projects: 'id, lastModified',
-  characters: 'id',
+  characters: 'id, projectId', // Added projectId for indexing
   misc: 'key',
   audioBlobs: 'id, lineId', // Added table for audio blobs, indexed by lineId
 });

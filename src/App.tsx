@@ -42,15 +42,19 @@ const App: React.FC = () => {
   ) => {
     const isNewCharacter = !characterAndCvStyleModal.characterToEdit || !characterAndCvStyleModal.characterToEdit.id;
     if (isNewCharacter) {
+      if (!selectedProjectId) {
+        alert("错误：无法在没有选定项目的情况下创建角色。");
+        return;
+      }
       // addCharacter is sync and returns the new character with an ID
-      const newChar = addCharacter(characterData);
+      const newChar = addCharacter(characterData, selectedProjectId);
       // editCharacter can then be used to properly set CV and other details that might involve async updates
       editCharacter(newChar, cvName, cvBgColor, cvTextColor);
     } else {
       editCharacter(characterData, cvName, cvBgColor, cvTextColor);
     }
     closeCharacterAndCvStyleModal();
-  }, [characterAndCvStyleModal.characterToEdit, addCharacter, editCharacter, closeCharacterAndCvStyleModal]);
+  }, [characterAndCvStyleModal.characterToEdit, addCharacter, editCharacter, closeCharacterAndCvStyleModal, selectedProjectId]);
 
 
   return (

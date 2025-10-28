@@ -7,6 +7,7 @@ export interface Collaborator {
 export interface Character {
   id: string;
   name: string;
+  projectId?: string; // To scope characters to a project
   color: string; // Character background: Tailwind color class (e.g., 'bg-blue-500') or hex code (e.g., '#3b82f6')
   textColor?: string; // Character text color: Tailwind color class or hex code
   cvName?: string;

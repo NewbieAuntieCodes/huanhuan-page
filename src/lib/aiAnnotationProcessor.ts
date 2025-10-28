@@ -5,8 +5,7 @@ import { AiAnnotatedLine, Character, ScriptLine } from '../types';
 // and handles character creation/lookup.
 export const processAiScriptAnnotations = (
   annotatedLinesFromAI: AiAnnotatedLine[],
-  // existingCharacters: Character[], // No longer directly needed here, onAddCharacter handles uniqueness
-  onAddCharacter: (character: Character) => Character // Callback to add/get character
+  onAddCharacter: (character: Pick<Character, 'name' | 'color' | 'textColor' | 'cvName' | 'description' | 'isStyleLockedToCv'>) => Character
 ): { newScriptLines: ScriptLine[] } => {
   const consolidatedAiLines: AiAnnotatedLine[] = [];
   let lastLineWasNarrator = false;
@@ -33,18 +32,14 @@ export const processAiScriptAnnotations = (
       if (tempCharacterNameMap.has(defaultNarratorName)) {
         characterForLine = tempCharacterNameMap.get(defaultNarratorName);
       } else {
-        const newNarratorCandidate: Character = {
-          id: Date.now().toString() + defaultNarratorName + index + "_narr_ai",
+        const newNarratorCandidate = {
           name: defaultNarratorName,
           color: 'bg-slate-500',
           textColor: 'text-slate-100',
           cvName: '',
-          description: '', // Default description is now empty
-          cvBackgroundColor: '', cvTextColor: '',
+          description: '',
           isStyleLockedToCv: false,
         };
-        // onAddCharacter is expected to handle checking for existing characters by name
-        // and returning the existing one or the newly added one.
         const actualNarrator = onAddCharacter(newNarratorCandidate);
         tempCharacterNameMap.set(defaultNarratorName, actualNarrator);
         characterForLine = actualNarrator;
@@ -56,14 +51,12 @@ export const processAiScriptAnnotations = (
         const availableColors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-400', 'bg-purple-600', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'];
         const availableTextColors = ['text-red-100', 'text-blue-100', 'text-green-100', 'text-yellow-800', 'text-purple-100', 'text-pink-100', 'text-indigo-100', 'text-teal-100'];
         const colorIndex = tempCharacterNameMap.size % availableColors.length;
-        const newCharacterCandidate: Character = {
-          id: Date.now().toString() + suggestedName + index + "_char_ai" + Math.random(),
+        const newCharacterCandidate = {
           name: suggestedName,
           color: availableColors[colorIndex],
           textColor: availableTextColors[colorIndex],
           cvName: '',
-          description: '', // Default description is now empty
-          cvBackgroundColor: '', cvTextColor: '',
+          description: '',
           isStyleLockedToCv: false,
         };
         const actualCharacter = onAddCharacter(newCharacterCandidate);

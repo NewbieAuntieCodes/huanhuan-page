@@ -9,7 +9,7 @@ export interface CharacterSlice {
   characters: Character[];
   allCvNames: string[];
   cvStyles: CVStylesMap;
-  addCharacter: (characterToAdd: Character) => Character; // Signature remains sync for utility functions
+  addCharacter: (characterToAdd: Pick<Character, 'name' | 'color' | 'textColor' | 'cvName' | 'description' | 'isStyleLockedToCv'>, projectId: string) => Character;
   editCharacter: (characterBeingEdited: Character, updatedCvName?: string, updatedCvBgColor?: string, updatedCvTextColor?: string) => Promise<void>;
   deleteCharacter: (characterId: string) => Promise<void>;
   updateCharacterCV: (characterId: string, cvName: string, cvBgColor: string, cvTextColor: string) => Promise<void>;
@@ -21,35 +21,30 @@ export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice
   characters: [],
   allCvNames: [],
   cvStyles: {},
-  // This action's signature remains synchronous to avoid major refactoring of parsing utilities.
-  // The DB write is a "fire-and-forget" operation.
-  addCharacter: (characterToAdd) => {
+  addCharacter: (characterToAdd, projectId) => {
     const state = get();
     
-    // Check for existing character by name (case-insensitive, active status)
-    const existingByName = state.characters.find(c => c.name.toLowerCase() === characterToAdd.name.toLowerCase() && c.status !== 'merged');
+    const existingByName = state.characters.find(c => 
+      c.name.toLowerCase() === characterToAdd.name.toLowerCase() && 
+      c.projectId === projectId &&
+      c.status !== 'merged'
+    );
     if (existingByName) {
         return existingByName;
     }
-
-    // Check by ID if an ID was provided
-    if (characterToAdd.id) {
-        const existingById = state.characters.find(c => c.id === characterToAdd.id && c.status !== 'merged');
-        if (existingById) {
-            return existingById;
-        }
-    }
     
-    // No character found, create a new one.
     const finalCharacter: Character = {
-        ...characterToAdd,
-        id: characterToAdd.id || Date.now().toString() + "_char_" + Math.random().toString(36).substr(2, 9),
+        id: Date.now().toString() + "_char_" + Math.random().toString(36).substr(2, 9),
+        name: characterToAdd.name,
+        projectId: projectId,
+        color: characterToAdd.color,
         textColor: characterToAdd.textColor || '',
         cvName: characterToAdd.cvName || '',
         description: characterToAdd.description || '',
         isStyleLockedToCv: characterToAdd.isStyleLockedToCv === undefined ? false : characterToAdd.isStyleLockedToCv,
         status: 'active' as const,
     };
+
     db.characters.add(finalCharacter).catch(err => console.error("DB: Failed to add character", err));
     set(s => ({ characters: [...s.characters, finalCharacter] }));
     
