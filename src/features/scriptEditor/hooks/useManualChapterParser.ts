@@ -45,7 +45,6 @@ export const useManualChapterParser = ({
         });
         return { ...prevProject, chapters: newChapters };
       });
-      setMultiSelectedChapterIdsAfterProcessing([]);
     } catch (error) {
       console.error("Manual parsing failed:", error);
       alert(`Manual parsing failed: ${error instanceof Error ? error.message : "Unknown error"}`);

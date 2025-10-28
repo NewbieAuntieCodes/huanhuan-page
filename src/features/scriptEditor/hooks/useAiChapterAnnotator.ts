@@ -90,7 +90,6 @@ export const useAiChapterAnnotator = ({
 
         return { ...prevProject, chapters: updatedChapters };
       });
-      setMultiSelectedChapterIdsAfterProcessing([]);
 
     } catch (error) {
       console.error("AI annotation failed:", error);

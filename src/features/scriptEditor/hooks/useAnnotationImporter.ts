@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { Project, Character, ScriptLine } from '../../../types';
 import useStore from '../../../store/useStore';
@@ -115,7 +116,6 @@ export const useAnnotationImporter = ({
       });
 
       setIsImportModalOpen(false);
-      setMultiSelectedChapterIdsAfterProcessing([]);
       return charactersWithCvToUpdate;
 
     } catch (error) {
