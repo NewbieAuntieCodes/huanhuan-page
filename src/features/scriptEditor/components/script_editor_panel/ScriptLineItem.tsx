@@ -149,39 +149,42 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
         }
     }, 150); 
   };
-
-  const isCurrentLineDialogue = isDialogue(line.text);
+  
+  const isNarrator = !character || character.name === 'Narrator';
+  
   let contentEditableStyle: React.CSSProperties = {};
-  let contentEditableClasses = 'flex-grow p-2 rounded-md min-h-[40px] focus:ring-1 focus:ring-sky-500 outline-none whitespace-pre-wrap'; // Added whitespace-pre-wrap
+  let contentEditableClasses = 'flex-grow p-2 rounded-md min-h-[40px] focus:ring-1 focus:ring-sky-500 outline-none whitespace-pre-wrap';
 
   if (isSilentLine) {
     contentEditableClasses += ' bg-slate-800 text-slate-500 italic';
-  } else if (isCurrentLineDialogue && character) {
+  } else if (isNarrator) {
+    contentEditableClasses += ' bg-slate-700 text-slate-100';
+  } else if (character) { // This handles all other characters like dialogue, sound effects etc.
     const charBg = character.color; 
     const charText = character.textColor; 
 
     if (isHexColor(charBg)) {
-      contentEditableStyle.backgroundColor = charBg;
+        contentEditableStyle.backgroundColor = charBg;
     } else {
-      contentEditableClasses += ` ${charBg || 'bg-slate-700'}`; 
+        contentEditableClasses += ` ${charBg || 'bg-slate-700'}`; 
     }
 
     if (charText) {
-      if (isHexColor(charText)) {
-        contentEditableStyle.color = charText;
-      } else { 
-        contentEditableClasses += ` ${charText}`;
-      }
+        if (isHexColor(charText)) {
+            contentEditableStyle.color = charText;
+        } else { 
+            contentEditableClasses += ` ${charText}`;
+        }
     } else { // No charText defined
-      if (isHexColor(charBg)) { 
-        contentEditableStyle.color = getContrastingTextColor(charBg);
-      } else { // charBg is a class, derive text based on common Tailwind dark shades
-        const darkBgPatterns = ['-700', '-800', '-900', 'slate-600', 'gray-600']; // Add more as needed
-        const isDarkBg = charBg && darkBgPatterns.some(pattern => charBg.includes(pattern));
-        contentEditableClasses += isDarkBg ? ' text-slate-100' : ' text-slate-800'; // Default to dark text for lighter unknown BGs
-      }
+        if (isHexColor(charBg)) { 
+            contentEditableStyle.color = getContrastingTextColor(charBg);
+        } else { // charBg is a class, derive text based on common Tailwind dark shades
+            const darkBgPatterns = ['-700', '-800', '-900', 'slate-600', 'gray-600']; // Add more as needed
+            const isDarkBg = charBg && darkBgPatterns.some(pattern => charBg.includes(pattern));
+            contentEditableClasses += isDarkBg ? ' text-slate-100' : ' text-slate-800'; // Default to dark text for lighter unknown BGs
+        }
     }
-  } else { 
+  } else { // Fallback for unassigned character
     contentEditableClasses += ' bg-slate-700 text-slate-100';
   }
   

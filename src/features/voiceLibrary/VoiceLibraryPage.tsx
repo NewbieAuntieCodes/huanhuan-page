@@ -139,7 +139,7 @@ const VoiceLibraryPage: React.FC = () => {
   }, []); // Empty dependency array ensures this runs only once on mount/unmount.
 
   const currentProject = useMemo(() => projects.find(p => p.id === selectedProjectId), [projects, selectedProjectId]);
-  const charactersInProject = useMemo(() => characters.filter(c => c.status !== 'merged' && c.name !== '[静音]'), [characters]);
+  const charactersInProject = useMemo(() => characters.filter(c => c.status !== 'merged' && c.name !== '[静音]' && c.name !== '音效'), [characters]);
   const selectedCharacter = useMemo(() => characters.find(c => c.id === selectedCharacterId), [characters, selectedCharacterId]);
 
   const filteredCharactersForDropdown = useMemo(() => {

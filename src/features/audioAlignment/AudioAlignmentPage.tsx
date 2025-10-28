@@ -3,6 +3,7 @@
 
 
 
+
 import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { useStore } from '../../store/useStore';
 import { ChevronLeftIcon, BookOpenIcon, UploadIcon, UserCircleIcon, ListBulletIcon, ArrowDownTrayIcon, SpeakerXMarkIcon } from '../../components/ui/icons';
@@ -112,16 +113,17 @@ const AudioAlignmentPage: React.FC = () => {
   const currentProject = projects.find(p => p.id === selectedProjectId);
   const selectedChapter = currentProject?.chapters.find(c => c.id === selectedChapterId);
 
-  const silentCharacterId = useMemo(() => {
-    const silentChar = characters.find(c => c.name === '[静音]');
-    return silentChar?.id;
+  const nonAudioCharacterIds = useMemo(() => {
+    return characters
+      .filter(c => c.name === '[静音]' || c.name === '音效')
+      .map(c => c.id);
   }, [characters]);
 
   const visibleScriptLines = useMemo(() => {
     if (!selectedChapter) return [];
-    if (!silentCharacterId) return selectedChapter.scriptLines;
-    return selectedChapter.scriptLines.filter(line => line.characterId !== silentCharacterId);
-  }, [selectedChapter, silentCharacterId]);
+    if (nonAudioCharacterIds.length === 0) return selectedChapter.scriptLines;
+    return selectedChapter.scriptLines.filter(line => !nonAudioCharacterIds.includes(line.characterId || ''));
+  }, [selectedChapter, nonAudioCharacterIds]);
 
   const onGoBack = () => {
     selectedProjectId ? navigateTo("editor") : navigateTo("dashboard");
@@ -594,11 +596,10 @@ const AudioAlignmentPage: React.FC = () => {
     
     if (!nextLine.audioBlobId || !playingLineInfo.line.audioBlobId) return false;
     
-    const silentChar = characters.find(c => c.name === '[静音]');
-    if (playingLineInfo.line.characterId === silentChar?.id) return false;
+    if (nonAudioCharacterIds.includes(playingLineInfo.line.characterId || '')) return false;
 
     return true;
-  }, [playingLineInfo, selectedChapter, characters]);
+  }, [playingLineInfo, selectedChapter, characters, nonAudioCharacterIds]);
 
 
   const hasAudioInChapter = useMemo(() => {

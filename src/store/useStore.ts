@@ -1,4 +1,5 @@
 
+
 import { create } from 'zustand';
 // Fix: Import from types.ts to break circular dependency
 import { AppView, CVStylesMap, PresetColor } from '../types';
@@ -94,6 +95,7 @@ export const useStore = create<AppState>((set, get, api) => ({
         { name: '[静音]', color: 'bg-slate-700', textColor: 'text-slate-400', description: '用于标记无需录制的旁白提示' },
         { name: 'Narrator', color: 'bg-slate-600', textColor: 'text-slate-100', description: '默认旁白角色' },
         { name: '待识别角色', color: 'bg-orange-400', textColor: 'text-black', description: '由系统自动识别但尚未分配的角色' },
+        { name: '音效', color: 'bg-transparent', textColor: 'text-red-500', description: '用于标记音效的文字描述' },
       ];
 
       for (const config of defaultCharConfigs) {
