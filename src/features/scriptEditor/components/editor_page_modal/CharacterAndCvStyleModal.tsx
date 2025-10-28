@@ -93,7 +93,8 @@ const CharacterAndCvStyleModal: React.FC<CharacterAndCvStyleModalProps> = ({
         setIsCharStyleLocked(false);
       }
     }
-  }, [characterToEdit, isOpen, cvStyles, defaultCharPreset]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [characterToEdit, isOpen]);
 
   useEffect(() => {
     if (isOpen && !isCharStyleLocked) {
