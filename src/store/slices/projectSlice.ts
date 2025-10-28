@@ -24,9 +24,10 @@ export interface ProjectSlice {
 export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = (set, get, _api) => ({
   projects: [],
   addProject: async (newProject) => {
-    await db.projects.add(newProject);
+    const projectWithExtras = { ...newProject, cvStyles: {} };
+    await db.projects.add(projectWithExtras);
     set(state => {
-      const updatedProjects = [newProject, ...state.projects].sort((a,b) => b.lastModified - a.lastModified);
+      const updatedProjects = [projectWithExtras, ...state.projects].sort((a,b) => b.lastModified - a.lastModified);
       return { projects: updatedProjects };
     });
   },
@@ -41,14 +42,52 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     });
   },
   deleteProject: async (projectId) => {
-    await db.projects.delete(projectId);
-    set(state => {
-      const updatedProjects = state.projects.filter(p => p.id !== projectId);
-      let newSelectedProjectId = state.selectedProjectId;
-      if (state.selectedProjectId === projectId) {
+    const state = get();
+
+    // Identify characters associated with the project being deleted
+    const characterIdsToDelete = state.characters
+      .filter(char => char.projectId === projectId)
+      .map(char => char.id);
+    
+    // Identify all audio blobs associated with the project's script lines
+    const projectToDelete = state.projects.find(p => p.id === projectId);
+    const audioBlobIdsToDelete: string[] = [];
+    if (projectToDelete) {
+      projectToDelete.chapters.forEach(chapter => {
+        chapter.scriptLines.forEach(line => {
+          if (line.audioBlobId) {
+            audioBlobIdsToDelete.push(line.audioBlobId);
+          }
+        });
+      });
+    }
+
+    // Perform an atomic transaction to delete the project and all its associated data
+    await db.transaction('rw', db.projects, db.characters, db.audioBlobs, async () => {
+      await db.projects.delete(projectId);
+      if (characterIdsToDelete.length > 0) {
+        await db.characters.bulkDelete(characterIdsToDelete);
+      }
+      if (audioBlobIdsToDelete.length > 0) {
+        await db.audioBlobs.bulkDelete(audioBlobIdsToDelete);
+      }
+    });
+
+    // Update the Zustand state after the database operations are complete
+    set(currentState => {
+      const updatedProjects = currentState.projects.filter(p => p.id !== projectId);
+      const updatedCharacters = currentState.characters.filter(char => !characterIdsToDelete.includes(char.id));
+      
+      let newSelectedProjectId = currentState.selectedProjectId;
+      if (currentState.selectedProjectId === projectId) {
         newSelectedProjectId = null;
       }
-      return { projects: updatedProjects, selectedProjectId: newSelectedProjectId };
+
+      return { 
+        projects: updatedProjects, 
+        characters: updatedCharacters,
+        selectedProjectId: newSelectedProjectId 
+      };
     });
   },
   addCollaboratorToProject: async (projectId, username, role) => {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UserPlusIcon, ArrowPathIcon, ArrowsRightLeftIcon, MagnifyingGlassIcon, EllipsisVerticalIcon } from '../../../../components/ui/icons';
+import { UserPlusIcon, ArrowPathIcon, ArrowsRightLeftIcon, MagnifyingGlassIcon, EllipsisVerticalIcon, TrashIcon } from '../../../../components/ui/icons';
 import { CharacterFilterMode } from '../../../../types'; 
 
 interface CharacterListHeaderControlsProps {
@@ -10,6 +10,7 @@ interface CharacterListHeaderControlsProps {
   onMergeSelectedCharacters: () => void;
   canUndoMerge: boolean;
   onUndoLastMerge: () => void;
+  onBatchDeleteCharacters: () => void;
   searchTerm: string;
   onSearchTermChange: (term: string) => void;
 }
@@ -22,6 +23,7 @@ const CharacterListHeaderControls: React.FC<CharacterListHeaderControlsProps> = 
   onMergeSelectedCharacters,
   canUndoMerge,
   onUndoLastMerge,
+  onBatchDeleteCharacters,
   searchTerm,
   onSearchTermChange,
 }) => {
@@ -39,6 +41,8 @@ const CharacterListHeaderControls: React.FC<CharacterListHeaderControlsProps> = 
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  const showNoMoreOperations = !canUndoMerge && selectedCharacterIdsForMerge.length === 0;
 
   return (
     <div className="mb-3 flex-shrink-0 space-y-3">
@@ -109,9 +113,9 @@ const CharacterListHeaderControls: React.FC<CharacterListHeaderControlsProps> = 
                 <EllipsisVerticalIcon className="w-4 h-4 mr-1" /> 更多
             </button>
             {isMoreMenuOpen && (
-                 <div className="absolute right-0 mt-2 w-40 bg-slate-700 rounded-md shadow-lg z-20 border border-slate-600 text-sm">
-                    <ul className="p-1">
-                        {canUndoMerge ? (
+                 <div className="absolute right-0 mt-2 w-48 bg-slate-700 rounded-md shadow-lg z-20 border border-slate-600 text-sm">
+                    <ul className="p-1 space-y-1">
+                        {canUndoMerge && (
                             <li>
                                 <button
                                     onClick={() => { onUndoLastMerge(); setIsMoreMenuOpen(false); }}
@@ -120,7 +124,18 @@ const CharacterListHeaderControls: React.FC<CharacterListHeaderControlsProps> = 
                                     <ArrowPathIcon className="w-4 h-4 mr-2" /> 撤销合并
                                 </button>
                             </li>
-                        ) : (
+                        )}
+                        <li>
+                            <button
+                                onClick={() => { onBatchDeleteCharacters(); setIsMoreMenuOpen(false); }}
+                                disabled={selectedCharacterIdsForMerge.length === 0}
+                                className="w-full flex items-center px-3 py-1.5 text-left rounded-md transition-colors text-red-300 hover:bg-red-800/50 disabled:text-slate-500 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                title={selectedCharacterIdsForMerge.length === 0 ? "请先勾选要删除的角色" : "删除所有选中的角色"}
+                            >
+                                <TrashIcon className="w-4 h-4 mr-2" /> 批量删除
+                            </button>
+                        </li>
+                         {showNoMoreOperations && (
                              <li>
                                 <span className="px-3 py-1.5 text-xs text-slate-500 block">无更多操作</span>
                              </li>

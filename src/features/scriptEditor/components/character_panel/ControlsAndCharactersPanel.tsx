@@ -40,6 +40,8 @@ export const ControlsAndCharactersPanel: React.FC<ControlsAndCharactersPanelProp
   const mergeHistory = useStore(state => state.mergeHistory);
   const mergeCharactersAction = useStore(state => state.mergeCharacters);
   const undoLastMergeAction = useStore(state => state.undoLastMerge);
+  const deleteCharactersAction = useStore(state => state.deleteCharacters);
+  const openConfirmModal = useStore(state => state.openConfirmModal);
   const [searchTerm, setSearchTerm] = useState('');
 
   // State for CV Details Modal is removed
@@ -52,7 +54,7 @@ export const ControlsAndCharactersPanel: React.FC<ControlsAndCharactersPanelProp
 
 
   const charactersToDisplay = useMemo(() => {
-    let filteredChars = storeCharacters.filter(c => c.status !== 'merged');
+    let filteredChars = storeCharacters.filter(c => (!c.projectId || c.projectId === currentProject?.id) && c.status !== 'merged');
     
     if (characterFilterMode === 'currentChapter' && currentProject && selectedChapterId) {
       const chapter = currentProject.chapters.find(ch => ch.id === selectedChapterId);
@@ -151,6 +153,24 @@ export const ControlsAndCharactersPanel: React.FC<ControlsAndCharactersPanelProp
     }
   };
 
+  const handleBatchDeleteCharacters = () => {
+    if (selectedCharacterIdsForMerge.length === 0) {
+        alert("请先勾选要删除的角色。");
+        return;
+    }
+
+    openConfirmModal(
+        `批量删除角色确认`,
+        `您确定要删除选中的 ${selectedCharacterIdsForMerge.length} 个角色吗？\n所有项目中引用这些角色的台词行，其角色将被重置为“未分配”。此操作无法撤销。`,
+        () => {
+            deleteCharactersAction(selectedCharacterIdsForMerge);
+            setSelectedCharacterIdsForMerge([]);
+        },
+        "确认删除",
+        "取消"
+    );
+  };
+
 
   return (
     <div className="p-4 h-full flex flex-col bg-slate-800 text-slate-100">
@@ -162,6 +182,7 @@ export const ControlsAndCharactersPanel: React.FC<ControlsAndCharactersPanelProp
         onMergeSelectedCharacters={handleOpenMergeModal}
         canUndoMerge={mergeHistory.length > 0}
         onUndoLastMerge={handleUndoLastMerge}
+        onBatchDeleteCharacters={handleBatchDeleteCharacters}
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
       />

@@ -1,7 +1,8 @@
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import { useStore }  from './store/useStore';
-import { Character } from './types';
+// FIX: Add CVStylesMap to imports for explicit typing of useMemo.
+import { Character, CVStylesMap } from './types';
 import ConfirmModal from './components/modal/ConfirmModal';
 import CharacterAndCvStyleModal from './features/scriptEditor/components/editor_page_modal/CharacterAndCvStyleModal';
 import AppRouter from './routing/AppRouter'; 
@@ -15,8 +16,6 @@ const App: React.FC = () => {
     characters, 
     selectedProjectId, 
     isLoading, 
-    allCvNames, 
-    cvStyles,
     confirmModal,
     characterAndCvStyleModal,
     isSettingsModalOpen,
@@ -34,21 +33,45 @@ const App: React.FC = () => {
     loadInitialData();
   }, [loadInitialData]);
 
+  // FIX: Added an explicit return type to `useMemo` to ensure TypeScript correctly infers `projectCvNames` as `string[]` instead of `unknown[]`.
+  // FIX: Replaced `Array.from(new Set(...))` with a `reduce` operation to create the unique list of CV names. This approach is more robust for TypeScript's type inference.
+  const { projectCvStyles, projectCvNames } = useMemo<{ projectCvStyles: CVStylesMap, projectCvNames: string[] }>(() => {
+    const currentProject = projects.find(p => p.id === selectedProjectId);
+    if (!currentProject) {
+      return { projectCvStyles: {}, projectCvNames: [] };
+    }
+    
+    // Get characters for the current project only, plus global characters (no projectId)
+    const projectCharacters = characters.filter(c => !c.projectId || c.projectId === selectedProjectId);
+    
+    // Derive CV names from the project's characters
+    const cvNames = projectCharacters.reduce<string[]>((acc, c) => {
+      if (c.cvName && !acc.includes(c.cvName)) {
+        acc.push(c.cvName);
+      }
+      return acc;
+    }, []).sort();
+
+    return {
+      projectCvStyles: currentProject.cvStyles || {},
+      projectCvNames: cvNames,
+    };
+  }, [selectedProjectId, projects, characters]);
+
+
   const handleSaveFromUnifiedModal = useCallback((
     characterData: Character,
     cvName: string,
     cvBgColor: string,
     cvTextColor: string
   ) => {
-    const isNewCharacter = !characterAndCvStyleModal.characterToEdit || !characterAndCvStyleModal.characterToEdit.id;
+    const isNewCharacter = !characterAndCvStyleModal.characterToEdit || !characterData.projectId;
     if (isNewCharacter) {
       if (!selectedProjectId) {
         alert("错误：无法在没有选定项目的情况下创建角色。");
         return;
       }
-      // addCharacter is sync and returns the new character with an ID
       const newChar = addCharacter(characterData, selectedProjectId);
-      // editCharacter can then be used to properly set CV and other details that might involve async updates
       editCharacter(newChar, cvName, cvBgColor, cvTextColor);
     } else {
       editCharacter(characterData, cvName, cvBgColor, cvTextColor);
@@ -117,8 +140,8 @@ const App: React.FC = () => {
           onClose={closeCharacterAndCvStyleModal}
           onSave={handleSaveFromUnifiedModal}
           characterToEdit={characterAndCvStyleModal.characterToEdit}
-          allCvNames={allCvNames}
-          cvStyles={cvStyles}
+          allCvNames={projectCvNames}
+          cvStyles={projectCvStyles}
         />
       )}
       <SettingsModal

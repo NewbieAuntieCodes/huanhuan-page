@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, FormEvent } from 'react';
 import { Character, Project, CVStyle, CVStylesMap } from '../../types';
 import { isHexColor, getContrastingTextColor } from '../../lib/colorUtils';
@@ -5,27 +6,18 @@ import { tailwindToHex } from '../../lib/tailwindColorMap';
 import { UserCircleIcon, PencilIcon, LockClosedIcon, LockOpenIcon, ChevronLeftIcon, MagnifyingGlassIcon, PaletteIcon } from '../../components/ui/icons';
 import { useStore } from '../../store/useStore';
 
-interface CvManagementPageProps {
-  onBulkUpdateCharacterStylesForCV: (cvName: string, newBgColor: string, newTextColor: string) => void;
-  onToggleCharacterStyleLock: (characterId: string) => void;
-}
-
 const CvManagementPage: React.FC = () => {
   const { 
-    allCvNames, 
     characters, 
     projects, 
-    cvStyles, 
     bulkUpdateCharacterStylesForCV, 
     toggleCharacterStyleLock, 
     openCharacterAndCvStyleModal,
     navigateTo,
     selectedProjectId
   } = useStore(state => ({
-    allCvNames: state.allCvNames,
     characters: state.characters,
     projects: state.projects,
-    cvStyles: state.cvStyles,
     bulkUpdateCharacterStylesForCV: state.bulkUpdateCharacterStylesForCV,
     toggleCharacterStyleLock: state.toggleCharacterStyleLock,
     openCharacterAndCvStyleModal: state.openCharacterAndCvStyleModal,
@@ -35,25 +27,36 @@ const CvManagementPage: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [editingCv, setEditingCv] = useState<{ name: string; bgColor: string; textColor: string } | null>(null);
+  
+  const currentProject = useMemo(() => projects.find(p => p.id === selectedProjectId), [projects, selectedProjectId]);
 
-  const comprehensiveCvNames = useMemo(() => {
-    const namesFromCharacters = new Set(
-      characters
-        .filter(c => c.cvName && c.status !== 'merged')
-        .map(c => c.cvName!)
-    );
-    const combined = new Set([...allCvNames, ...Array.from(namesFromCharacters)]);
-    return Array.from(combined).sort();
-  }, [allCvNames, characters]);
+  // FIX: Added an explicit return type to `useMemo` to ensure TypeScript correctly infers `projectCvNames` as `string[]`, fixing multiple subsequent errors.
+  // FIX: Replaced `Array.from(new Set(...))` with a `reduce` operation to create the unique list of CV names. This approach is more robust for TypeScript's type inference.
+  const projectData = useMemo<{ projectCharacters: Character[]; projectCvStyles: CVStylesMap; projectCvNames: string[] }>(() => {
+    if (!currentProject) {
+      return { projectCharacters: [], projectCvStyles: {}, projectCvNames: [] };
+    }
+    const projectCharacters = characters.filter(c => (!c.projectId || c.projectId === currentProject.id) && c.status !== 'merged');
+    const projectCvStyles = currentProject.cvStyles || {};
+    const projectCvNames = projectCharacters.reduce<string[]>((acc, c) => {
+      if (c.cvName && !acc.includes(c.cvName)) {
+        acc.push(c.cvName);
+      }
+      return acc;
+    }, []).sort();
+    return { projectCharacters, projectCvStyles, projectCvNames };
+  }, [currentProject, characters]);
+
+  const { projectCharacters, projectCvStyles, projectCvNames } = projectData;
 
   const filteredCvNames = useMemo(() => {
     if (!searchTerm.trim()) {
-      return comprehensiveCvNames;
+      return projectCvNames;
     }
-    return comprehensiveCvNames.filter(cvName =>
+    return projectCvNames.filter(cvName =>
       cvName.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [comprehensiveCvNames, searchTerm]);
+  }, [projectCvNames, searchTerm]);
   
   const onNavigateBack = () => {
     selectedProjectId ? navigateTo("editor") : navigateTo("dashboard");
@@ -85,35 +88,33 @@ const CvManagementPage: React.FC = () => {
   };
 
   const calculateCharacterLineCount = (characterId: string): number => {
+    if (!currentProject) return 0;
     let count = 0;
-    projects.forEach(project => {
-      project.chapters.forEach(chapter => {
-        chapter.scriptLines.forEach(line => {
-          if (line.characterId === characterId) {
-            count++;
-          }
-        });
+    currentProject.chapters.forEach(chapter => {
+      chapter.scriptLines.forEach(line => {
+        if (line.characterId === characterId) {
+          count++;
+        }
       });
     });
     return count;
   };
 
   const calculateCvStats = (cvName: string): { totalLines: number; totalWords: number } => {
+    if (!currentProject) return { totalLines: 0, totalWords: 0 };
     let totalLines = 0;
     let totalWords = 0;
-    const characterIdsForCv = characters
-      .filter(c => c.cvName === cvName && c.status !== 'merged')
+    const characterIdsForCv = projectCharacters
+      .filter(c => c.cvName === cvName)
       .map(c => c.id);
 
     if (characterIdsForCv.length > 0) {
-      projects.forEach(project => {
-        project.chapters.forEach(chapter => {
-          chapter.scriptLines.forEach(line => {
-            if (line.characterId && characterIdsForCv.includes(line.characterId)) {
-              totalLines++;
-              totalWords += line.text.length;
-            }
-          });
+      currentProject.chapters.forEach(chapter => {
+        chapter.scriptLines.forEach(line => {
+          if (line.characterId && characterIdsForCv.includes(line.characterId)) {
+            totalLines++;
+            totalWords += line.text.length;
+          }
         });
       });
     }
@@ -165,10 +166,26 @@ const CvManagementPage: React.FC = () => {
     return tailwindToHex[colorValue] || fallback;
   };
 
+  if (!currentProject) {
+    return (
+      <div className="p-4 md:p-6 h-full flex flex-col items-center justify-center bg-slate-900 text-slate-100">
+        <UserCircleIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" />
+        <h1 className="text-2xl font-bold text-sky-400 mb-4">CV 管理</h1>
+        <p className="text-slate-400">请先从项目面板选择一个项目以管理其CV信息。</p>
+        <button
+          onClick={onNavigateBack}
+          className="mt-6 flex items-center text-sm text-sky-300 hover:text-sky-100 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md"
+        >
+          <ChevronLeftIcon className="w-4 h-4 mr-1" /> 返回项目面板
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 h-full flex flex-col bg-slate-900 text-slate-100 overflow-y-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-sky-400">CV 管理</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-sky-400">CV 管理: {currentProject.name}</h1>
         <button
           onClick={onNavigateBack}
           className="flex items-center text-sm text-sky-300 hover:text-sky-100 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md"
@@ -195,10 +212,10 @@ const CvManagementPage: React.FC = () => {
         </div>
       </div>
 
-      {comprehensiveCvNames.length === 0 ? (
+      {projectCvNames.length === 0 ? (
         <div className="text-center py-10">
           <UserCircleIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" />
-          <p className="text-slate-400">尚无CV信息。请在编辑角色时添加CV。</p>
+          <p className="text-slate-400">此项目中尚无CV信息。请在编辑角色时添加CV。</p>
         </div>
       ) : filteredCvNames.length === 0 ? (
         <div className="text-center py-10">
@@ -208,8 +225,8 @@ const CvManagementPage: React.FC = () => {
       ) : (
         <div className="space-y-6">
           {filteredCvNames.map((cvName) => {
-            const charactersForThisCv = characters.filter(c => c.cvName === cvName && c.status !== 'merged');
-            const cvGlobalStyle = cvStyles[cvName] || { bgColor: 'bg-slate-700', textColor: 'text-slate-300' };
+            const charactersForThisCv = projectCharacters.filter(c => c.cvName === cvName);
+            const cvGlobalStyle = projectCvStyles[cvName] || { bgColor: 'bg-slate-700', textColor: 'text-slate-300' };
             const globalStylePreview = getStylePreview(cvGlobalStyle.bgColor, cvGlobalStyle.textColor);
             const cvStats = calculateCvStats(cvName);
 

@@ -51,6 +51,7 @@ export interface Project {
   subCategory: string; // Can be predefined or custom
   collaborators?: Collaborator[];
   lastModified: number; // Timestamp for sorting
+  cvStyles?: CVStylesMap;
 }
 
 // For Gemini service response parsing

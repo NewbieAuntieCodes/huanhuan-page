@@ -37,10 +37,8 @@ export const useStore = create<AppState>((set, get, api) => ({
   loadInitialData: async () => {
     try {
       const [
-        projects,
+        projectsFromDb,
         characters,
-        allCvNamesItem,
-        cvStylesItem,
         mergeHistoryItem,
         cvColorPresetsItem,
         characterColorPresetsItem,
@@ -50,8 +48,6 @@ export const useStore = create<AppState>((set, get, api) => ({
         return Promise.all([
           db.projects.orderBy('lastModified').reverse().toArray(),
           db.characters.toArray(),
-          db.misc.get('allCvNames'),
-          db.misc.get('cvStyles'),
           db.misc.get('mergeHistory'),
           db.misc.get('cvColorPresets'),
           db.misc.get('characterColorPresets'),
@@ -60,8 +56,7 @@ export const useStore = create<AppState>((set, get, api) => ({
         ]);
       });
 
-      const allCvNames = allCvNamesItem?.value || [];
-      const cvStyles = cvStylesItem?.value || {};
+      const projects = projectsFromDb.map(p => ({ ...p, cvStyles: p.cvStyles || {} }));
       const mergeHistory = mergeHistoryItem?.value || [];
       const apiSettings = apiSettingsItem?.value || get().apiSettings;
       const selectedAiProvider = selectedAiProviderItem?.value || 'gemini';
@@ -99,7 +94,7 @@ export const useStore = create<AppState>((set, get, api) => ({
       ];
 
       for (const config of defaultCharConfigs) {
-        if (!processedCharacters.some(c => c.name === config.name)) {
+        if (!processedCharacters.some(c => c.name === config.name && !c.projectId)) { // Check for global defaults
           const newChar: Character = {
             id: Date.now().toString() + "_char_default_" + Math.random(),
             name: config.name,
@@ -119,13 +114,9 @@ export const useStore = create<AppState>((set, get, api) => ({
         processedCharacters.push(...defaultCharsToAdd);
       }
 
-      const sortedCvNames = allCvNames.sort();
-
       set({
         projects,
         characters: processedCharacters,
-        allCvNames: sortedCvNames,
-        cvStyles,
         mergeHistory,
         cvColorPresets,
         characterColorPresets,
@@ -141,8 +132,6 @@ export const useStore = create<AppState>((set, get, api) => ({
       set({
         projects: [],
         characters: [],
-        allCvNames: [],
-        cvStyles: {},
         mergeHistory: [],
         cvColorPresets: defaultCvPresetColors,
         characterColorPresets: defaultCharacterPresetColors,
@@ -162,87 +151,10 @@ export const useStore = create<AppState>((set, get, api) => ({
       return;
     }
 
-    const newCvStyles = { ...state.cvStyles };
-    const newAllCvNames = [...state.allCvNames];
-    const changes: { oldName: string; newPreset: PresetColor; colorChanged: boolean; nameChanged: boolean }[] = [];
-
-    presets.forEach((newPreset, index) => {
-      const oldPreset = oldPresets[index];
-      if (oldPreset) {
-        const colorChanged = oldPreset.bgColorClass !== newPreset.bgColorClass || oldPreset.textColorClass !== newPreset.textColorClass;
-        const nameChanged = oldPreset.name !== newPreset.name;
-        if (colorChanged || nameChanged) {
-          changes.push({ oldName: oldPreset.name, newPreset, colorChanged, nameChanged });
-        }
-      }
-    });
-
-    if (changes.length > 0) {
-      let charactersModified = false;
-      const updatedCharacters = [...state.characters];
-
-      changes.forEach(change => {
-        const { oldName, newPreset, colorChanged, nameChanged } = change;
-        const newName = newPreset.name;
-
-        if (nameChanged) {
-          delete newCvStyles[oldName];
-          const oldNameIndex = newAllCvNames.findIndex(n => n.toLowerCase() === oldName.toLowerCase());
-          if (oldNameIndex > -1) {
-            newAllCvNames.splice(oldNameIndex, 1);
-          }
-          if (!newAllCvNames.some(n => n.toLowerCase() === newName.toLowerCase())) {
-            newAllCvNames.push(newName);
-          }
-        }
-        newCvStyles[newName] = {
-          bgColor: newPreset.bgColorClass,
-          textColor: newPreset.textColorClass,
-        };
-
-        updatedCharacters.forEach((char, index) => {
-          if (char.cvName === oldName) {
-            const charCopy = { ...char };
-            let needsUpdate = false;
-            if (nameChanged) {
-              charCopy.cvName = newName;
-              needsUpdate = true;
-            }
-            if (colorChanged && !char.isStyleLockedToCv) {
-              charCopy.color = newPreset.bgColorClass;
-              charCopy.textColor = newPreset.textColorClass;
-              needsUpdate = true;
-            }
-            if (needsUpdate) {
-              updatedCharacters[index] = charCopy;
-              charactersModified = true;
-            }
-          }
-        });
-      });
-
-      newAllCvNames.sort();
-
-      await db.transaction('rw', db.misc, db.characters, async () => {
-        await db.misc.put({ key: 'cvColorPresets', value: presets });
-        await db.misc.put({ key: 'cvStyles', value: newCvStyles });
-        await db.misc.put({ key: 'allCvNames', value: newAllCvNames });
-        if (charactersModified) {
-          await db.characters.bulkPut(updatedCharacters);
-        }
-      });
-
-      set({
-        cvColorPresets: presets,
-        cvStyles: newCvStyles,
-        characters: updatedCharacters,
-        allCvNames: newAllCvNames,
-      });
-    } else {
-      // No color changes, but maybe names or order did. Save anyway.
-      await db.misc.put({ key: 'cvColorPresets', value: presets });
-      set({ cvColorPresets: presets });
-    }
+    // Since cvStyles is now per-project, this global preset update doesn't automatically propagate
+    // to character colors anymore. This simplifies the logic here significantly. We just save the presets.
+    await db.misc.put({ key: 'cvColorPresets', value: presets });
+    set({ cvColorPresets: presets });
   },
   updateCharacterColorPresets: async (presets: PresetColor[]) => {
     await db.misc.put({ key: 'characterColorPresets', value: presets });

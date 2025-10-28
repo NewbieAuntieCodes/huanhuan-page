@@ -1,29 +1,24 @@
 import { StateCreator } from 'zustand';
 import { AppState } from '../useStore';
-import { Character } from '../../types';
-// Fix: Import from types.ts to break circular dependency
-import { CVStylesMap } from '../../types';
+import { Character, Project } from '../../types';
 import { db } from '../../db';
 
 export interface CharacterSlice {
   characters: Character[];
-  allCvNames: string[];
-  cvStyles: CVStylesMap;
   addCharacter: (characterToAdd: Pick<Character, 'name' | 'color' | 'textColor' | 'cvName' | 'description' | 'isStyleLockedToCv'>, projectId: string) => Character;
   editCharacter: (characterBeingEdited: Character, updatedCvName?: string, updatedCvBgColor?: string, updatedCvTextColor?: string) => Promise<void>;
   deleteCharacter: (characterId: string) => Promise<void>;
-  updateCharacterCV: (characterId: string, cvName: string, cvBgColor: string, cvTextColor: string) => Promise<void>;
+  deleteCharacters: (characterIds: string[]) => Promise<void>;
   toggleCharacterStyleLock: (characterId: string) => Promise<void>;
   bulkUpdateCharacterStylesForCV: (cvName: string, newBgColor: string, newTextColor: string) => Promise<void>;
 }
 
 export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice> = (set, get, _api) => ({
   characters: [],
-  allCvNames: [],
-  cvStyles: {},
   addCharacter: (characterToAdd, projectId) => {
     const state = get();
     
+    // Global characters (like Narrator) can exist. Project-specific characters are checked with projectId.
     const existingByName = state.characters.find(c => 
       c.name.toLowerCase() === characterToAdd.name.toLowerCase() && 
       c.projectId === projectId &&
@@ -36,7 +31,7 @@ export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice
     const finalCharacter: Character = {
         id: Date.now().toString() + "_char_" + Math.random().toString(36).substr(2, 9),
         name: characterToAdd.name,
-        projectId: projectId,
+        projectId: projectId, // Associate with the project
         color: characterToAdd.color,
         textColor: characterToAdd.textColor || '',
         cvName: characterToAdd.cvName || '',
@@ -51,49 +46,52 @@ export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice
     return finalCharacter;
   },
   editCharacter: async (characterBeingEdited, updatedCvNameFromModalProp, updatedCvBgColorFromModalProp, updatedCvTextColorFromModalProp) => {
-    const state = get();
-    const trimmedCvNameFromModal = updatedCvNameFromModalProp?.trim();
-    let newCvStyles = { ...state.cvStyles };
-    let newAllCvNames = [...state.allCvNames];
-
-    if (trimmedCvNameFromModal && updatedCvBgColorFromModalProp && updatedCvTextColorFromModalProp) {
-        newCvStyles[trimmedCvNameFromModal] = { bgColor: updatedCvBgColorFromModalProp, textColor: updatedCvTextColorFromModalProp };
-        if (!newAllCvNames.some(name => name.toLowerCase() === trimmedCvNameFromModal.toLowerCase())) {
-            newAllCvNames = [...newAllCvNames, trimmedCvNameFromModal].sort();
-        }
+    const { projects, characters } = get();
+    const projectId = characterBeingEdited.projectId || get().selectedProjectId;
+    if (!projectId) {
+      console.error("Cannot edit character/CV: No project context.");
+      alert("错误：无法在没有选定项目的情况下编辑角色。");
+      return;
     }
 
-    const updatedCharacters = state.characters.map(char => {
-        if (char.id === characterBeingEdited.id) {
-            return {
-                ...char,
-                name: characterBeingEdited.name.trim(),
-                description: characterBeingEdited.description?.trim() || '',
-                cvName: trimmedCvNameFromModal,
-                isStyleLockedToCv: characterBeingEdited.isStyleLockedToCv,
-                color: characterBeingEdited.color,
-                textColor: characterBeingEdited.textColor,
-                status: characterBeingEdited.status || char.status || 'active',
-            };
-        } else {
-            let otherChar = { ...char };
-            if (otherChar.cvName && newCvStyles[otherChar.cvName] && !otherChar.isStyleLockedToCv) {
-                otherChar.color = newCvStyles[otherChar.cvName].bgColor;
-                otherChar.textColor = newCvStyles[otherChar.cvName].textColor;
-            }
-            return otherChar;
-        }
-    });
+    const projectToUpdate = projects.find(p => p.id === projectId);
+    if (!projectToUpdate) {
+      console.error(`Project with ID ${projectId} not found.`);
+      return;
+    }
+    
+    const trimmedCvName = (updatedCvNameFromModalProp || '').trim();
 
-    await db.transaction('rw', db.characters, db.misc, async () => {
-        await db.characters.bulkPut(updatedCharacters);
-        if (trimmedCvNameFromModal) {
-            await db.misc.put({ key: 'cvStyles', value: newCvStyles });
-            await db.misc.put({ key: 'allCvNames', value: newAllCvNames });
-        }
-    });
+    // Update Project's CV Styles
+    let newProjectCvStyles = { ...(projectToUpdate.cvStyles || {}) };
+    if (trimmedCvName && updatedCvBgColorFromModalProp && updatedCvTextColorFromModalProp) {
+        newProjectCvStyles[trimmedCvName] = { bgColor: updatedCvBgColorFromModalProp, textColor: updatedCvTextColorFromModalProp };
+    }
+    const updatedProject = { ...projectToUpdate, cvStyles: newProjectCvStyles };
 
-    set({ characters: updatedCharacters, allCvNames: newAllCvNames, cvStyles: newCvStyles });
+    // Prepare the final character data to be saved
+    const finalCharacterData = { ...characterBeingEdited, cvName: trimmedCvName };
+
+    // If style is not locked, sync it with the CV style
+    if (!finalCharacterData.isStyleLockedToCv && trimmedCvName && newProjectCvStyles[trimmedCvName]) {
+        finalCharacterData.color = newProjectCvStyles[trimmedCvName].bgColor;
+        finalCharacterData.textColor = newProjectCvStyles[trimmedCvName].textColor;
+    }
+
+    // Create the new characters array for state update
+    const updatedCharacters = characters.map(c => c.id === finalCharacterData.id ? finalCharacterData : c);
+
+    // Perform DB operations in a transaction
+    await db.transaction('rw', db.projects, db.characters, async () => {
+        await db.projects.put(updatedProject);
+        await db.characters.put(finalCharacterData);
+    });
+    
+    // Update state
+    set({ 
+        projects: projects.map(p => p.id === projectId ? updatedProject : p),
+        characters: updatedCharacters 
+    });
   },
   deleteCharacter: async (characterId) => {
     const state = get();
@@ -102,117 +100,142 @@ export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice
     let updatedProjects = state.projects;
     let needsProjectUpdate = false;
 
+    // Do not allow deleting global default characters
+    if (charToDelete && !charToDelete.projectId) {
+      alert(`无法删除默认角色: ${charToDelete.name}`);
+      return;
+    }
+
     if (charToDelete && charToDelete.status === 'merged') {
         updatedCharacters = state.characters.filter(char => char.id !== characterId);
     } else {
         updatedCharacters = state.characters.filter(char => char.id !== characterId);
-        updatedProjects = state.projects.map(proj => ({
-            ...proj,
-            chapters: proj.chapters.map(ch => ({
-                ...ch,
-                scriptLines: ch.scriptLines.map(line =>
-                    line.characterId === characterId ? { ...line, characterId: undefined } : line
-                )
-            }))
-        }));
-        needsProjectUpdate = true;
+        updatedProjects = state.projects.map(proj => {
+            // Only modify projects that this character belongs to
+            if (charToDelete && proj.id === charToDelete.projectId) {
+                needsProjectUpdate = true;
+                return {
+                    ...proj,
+                    chapters: proj.chapters.map(ch => ({
+                        ...ch,
+                        scriptLines: ch.scriptLines.map(line =>
+                            line.characterId === characterId ? { ...line, characterId: undefined } : line
+                        )
+                    }))
+                };
+            }
+            return proj;
+        });
     }
 
     await db.transaction('rw', db.characters, db.projects, async () => {
         await db.characters.delete(characterId);
         if (needsProjectUpdate) {
-            await db.projects.bulkPut(updatedProjects);
+            await db.projects.bulkPut(updatedProjects.filter(p => {
+                const charProject = charToDelete ? charToDelete.projectId : null;
+                return p.id === charProject;
+            }));
         }
     });
 
     set({ characters: updatedCharacters, projects: updatedProjects });
   },
-  updateCharacterCV: async (characterId, cvName, cvBgColor, cvTextColor) => {
+  deleteCharacters: async (characterIds) => {
     const state = get();
-    const trimmedCvName = cvName.trim();
-    let newCvStyles = { ...state.cvStyles };
-    let newAllCvNames = [...state.allCvNames];
+    
+    const charsToDelete = state.characters.filter(c => characterIds.includes(c.id));
+    const globalCharsFound = charsToDelete.filter(c => !c.projectId);
 
-    if (trimmedCvName) {
-        newCvStyles[trimmedCvName] = { bgColor: cvBgColor, textColor: cvTextColor };
-        if (!state.allCvNames.some(name => name.toLowerCase() === trimmedCvName.toLowerCase())) {
-            newAllCvNames = [...state.allCvNames, trimmedCvName].sort();
-        }
-    }
-
-    const updatedCharacters = state.characters.map(char => {
-        if (char.id === characterId) {
-            const updatedChar: Character = { ...char, cvName: trimmedCvName };
-            if (!char.isStyleLockedToCv && trimmedCvName && newCvStyles[trimmedCvName]) {
-                updatedChar.color = newCvStyles[trimmedCvName].bgColor;
-                updatedChar.textColor = newCvStyles[trimmedCvName].textColor;
-            }
-            return updatedChar;
-        } else if (char.cvName === trimmedCvName && !char.isStyleLockedToCv && trimmedCvName && newCvStyles[trimmedCvName]) {
-            return { ...char, color: newCvStyles[trimmedCvName].bgColor, textColor: newCvStyles[trimmedCvName].textColor };
-        }
-        return char;
-    });
-
-    await db.transaction('rw', db.characters, db.misc, async () => {
-        await db.characters.bulkPut(updatedCharacters);
-        if (trimmedCvName) {
-            await db.misc.put({ key: 'cvStyles', value: newCvStyles });
-            await db.misc.put({ key: 'allCvNames', value: newAllCvNames });
-        }
-    });
-
-    set({ characters: updatedCharacters, cvStyles: newCvStyles, allCvNames: newAllCvNames });
-  },
-  toggleCharacterStyleLock: async (characterId) => {
-    const state = get();
-    let characterToUpdate: Character | undefined;
-    const updatedCharacters = state.characters.map(char => {
-        if (char.id === characterId) {
-            const newLockState = !(char.isStyleLockedToCv || false);
-            const updatedChar = { ...char, isStyleLockedToCv: newLockState };
-            if (!newLockState && char.cvName && state.cvStyles[char.cvName]) {
-                updatedChar.color = state.cvStyles[char.cvName].bgColor;
-                updatedChar.textColor = state.cvStyles[char.cvName].textColor;
-            }
-            characterToUpdate = updatedChar;
-            return updatedChar;
-        }
-        return char;
-    });
-
-    if (characterToUpdate) {
-        await db.characters.put(characterToUpdate);
-    }
-
-    set({ characters: updatedCharacters });
-  },
-  bulkUpdateCharacterStylesForCV: async (cvName, newBgColor, newTextColor) => {
-    const state = get();
-    let updatedCvStyles = { ...state.cvStyles };
-    if (cvName) {
-        updatedCvStyles[cvName] = { bgColor: newBgColor, textColor: newTextColor };
+    if (globalCharsFound.length > 0) {
+        alert(`无法批量删除默认角色: ${globalCharsFound.map(c => c.name).join(', ')}`);
+        return;
     }
     
-    const charactersToUpdate: Character[] = [];
-    const updatedCharacters = state.characters.map(char => {
-        if (char.cvName === cvName && !(char.isStyleLockedToCv || false)) {
+    const updatedCharacters = state.characters.filter(char => !characterIds.includes(char.id));
+
+    let projectsHadChanges = false;
+    const projectIdsAffected = new Set(charsToDelete.map(c => c.projectId));
+
+    const updatedProjects = state.projects.map(proj => {
+        if (projectIdsAffected.has(proj.id)) {
+            projectsHadChanges = true;
+            return {
+                ...proj,
+                chapters: proj.chapters.map(ch => ({
+                    ...ch,
+                    scriptLines: ch.scriptLines.map(line => 
+                        line.characterId && characterIds.includes(line.characterId) ? { ...line, characterId: undefined } : line
+                    )
+                })),
+                lastModified: Date.now()
+            };
+        }
+        return proj;
+    });
+
+    await db.transaction('rw', db.characters, db.projects, async () => {
+        await db.characters.bulkDelete(characterIds);
+        if (projectsHadChanges) {
+            await db.projects.bulkPut(updatedProjects.filter(p => projectIdsAffected.has(p.id)));
+        }
+    });
+
+    set({ characters: updatedCharacters, projects: updatedProjects });
+  },
+  toggleCharacterStyleLock: async (characterId) => {
+    const { characters, projects } = get();
+    const characterToUpdate = characters.find(c => c.id === characterId);
+    if (!characterToUpdate) return;
+    
+    // Can't toggle lock for global characters
+    if (!characterToUpdate.projectId) return;
+
+    const project = projects.find(p => p.id === characterToUpdate.projectId);
+    const projectCvStyles = project?.cvStyles || {};
+
+    const newLockState = !characterToUpdate.isStyleLockedToCv;
+    const updatedChar = { ...characterToUpdate, isStyleLockedToCv: newLockState };
+
+    if (!newLockState && updatedChar.cvName && projectCvStyles[updatedChar.cvName]) {
+        updatedChar.color = projectCvStyles[updatedChar.cvName].bgColor;
+        updatedChar.textColor = projectCvStyles[updatedChar.cvName].textColor;
+    }
+    
+    await db.characters.put(updatedChar);
+
+    set({ characters: characters.map(c => c.id === characterId ? updatedChar : c) });
+  },
+  bulkUpdateCharacterStylesForCV: async (cvName, newBgColor, newTextColor) => {
+    const { projects, characters, selectedProjectId } = get();
+    if (!selectedProjectId) return;
+    const projectToUpdate = projects.find(p => p.id === selectedProjectId);
+    if (!projectToUpdate) return;
+
+    const newProjectCvStyles = { ...(projectToUpdate.cvStyles || {}) };
+    newProjectCvStyles[cvName] = { bgColor: newBgColor, textColor: newTextColor };
+    const updatedProject = { ...projectToUpdate, cvStyles: newProjectCvStyles };
+
+    const charactersToUpdateInDb: Character[] = [];
+    const updatedCharacters = characters.map(char => {
+        // Only update characters belonging to the current project
+        if (char.projectId === selectedProjectId && char.cvName === cvName && !char.isStyleLockedToCv) {
             const updated = { ...char, color: newBgColor, textColor: newTextColor };
-            charactersToUpdate.push(updated);
+            charactersToUpdateInDb.push(updated);
             return updated;
         }
         return char;
     });
 
-    await db.transaction('rw', db.characters, db.misc, async () => {
-        if (charactersToUpdate.length > 0) {
-            await db.characters.bulkPut(charactersToUpdate);
-        }
-        if (cvName) {
-            await db.misc.put({ key: 'cvStyles', value: updatedCvStyles });
+    await db.transaction('rw', db.projects, db.characters, async () => {
+        await db.projects.put(updatedProject);
+        if (charactersToUpdateInDb.length > 0) {
+            await db.characters.bulkPut(charactersToUpdateInDb);
         }
     });
 
-    set({ characters: updatedCharacters, cvStyles: updatedCvStyles });
+    set({
+        projects: projects.map(p => p.id === selectedProjectId ? updatedProject : p),
+        characters: updatedCharacters
+    });
   },
 });

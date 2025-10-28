@@ -32,13 +32,10 @@ interface EditorPageProps {
   projectId: string;
   projects: Project[];
   characters: Character[];
-  allCvNames: string[];
-  cvStyles: CVStylesMap;
   onProjectUpdate: (project: Project) => void;
   onAddCharacter: (characterData: Pick<Character, 'name' | 'color' | 'textColor' | 'cvName' | 'description' | 'isStyleLockedToCv'>, projectId: string) => Character;
   onDeleteCharacter: (characterId: string) => void;
   onDeleteChapters: (chapterIds: string[], undoableDelete: () => void) => void;
-  onUpdateCharacterCV: (characterId: string, cvName: string, cvBgColor: string, cvTextColor: string) => Promise<void>;
   onToggleCharacterStyleLock: (characterId: string) => void;
   onBulkUpdateCharacterStylesForCV: (cvName: string, newBgColor: string, newTextColor: string) => void;
   onNavigateToDashboard: () => void;
@@ -51,13 +48,10 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     projectId,
     projects,
     characters,
-    allCvNames,
-    cvStyles,
     onProjectUpdate,
     onAddCharacter,
     onDeleteCharacter,
     onDeleteChapters,
-    onUpdateCharacterCV,
     onToggleCharacterStyleLock,
     onBulkUpdateCharacterStylesForCV,
     onNavigateToDashboard,
@@ -81,15 +75,26 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
   
   const scriptImportInputRef = useRef<HTMLInputElement>(null);
 
-  const projectCharacters = useMemo(() => {
-    return characters.filter(c => !c.projectId || c.projectId === projectId);
-  }, [characters, projectId]);
+  const { projectCharacters, allCvNames, cvStyles } = useMemo(() => {
+    const projChars = characters.filter(c => !c.projectId || c.projectId === projectId);
+    const cvs = Array.from(new Set(projChars.map(c => c.cvName).filter((n): n is string => !!n))).sort();
+    const styles = currentProject?.cvStyles || {};
+    return { projectCharacters: projChars, allCvNames: cvs, cvStyles: styles };
+  }, [characters, projectId, currentProject]);
+
   
   const handleAddCharacterForProject = useCallback((
     charData: Pick<Character, 'name' | 'color' | 'textColor' | 'cvName' | 'description' | 'isStyleLockedToCv'>
   ) => {
     return onAddCharacter(charData, projectId);
   }, [onAddCharacter, projectId]);
+
+  const onUpdateCharacterCV = async (characterId: string, cvName: string, cvBgColor: string, cvTextColor: string) => {
+    const char = characters.find(c => c.id === characterId);
+    if (char) {
+      await onEditCharacter(char, cvName, cvBgColor, cvTextColor);
+    }
+  };
 
 
   const setMultiSelectedChapterIdsAfterProcessing = useCallback((ids: string[]) => {

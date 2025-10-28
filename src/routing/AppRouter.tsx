@@ -13,14 +13,11 @@ const AppRouter: React.FC = () => {
     currentView,
     projects,
     characters,
-    allCvNames,
-    cvStyles,
     selectedProjectId,
     updateProject,
     addCharacter,
     deleteCharacter,
     editCharacter,
-    updateCharacterCV,
     toggleCharacterStyleLock,
     bulkUpdateCharacterStylesForCV,
     navigateTo,
@@ -30,14 +27,11 @@ const AppRouter: React.FC = () => {
     currentView: state.currentView,
     projects: state.projects,
     characters: state.characters,
-    allCvNames: state.allCvNames,
-    cvStyles: state.cvStyles,
     selectedProjectId: state.selectedProjectId,
     updateProject: state.updateProject,
     addCharacter: state.addCharacter,
     deleteCharacter: state.deleteCharacter,
     editCharacter: state.editCharacter,
-    updateCharacterCV: state.updateCharacterCV,
     toggleCharacterStyleLock: state.toggleCharacterStyleLock,
     bulkUpdateCharacterStylesForCV: state.bulkUpdateCharacterStylesForCV,
     navigateTo: state.navigateTo,
@@ -72,13 +66,10 @@ const AppRouter: React.FC = () => {
           projectId={selectedProjectId}
           projects={projects}
           characters={characters}
-          allCvNames={allCvNames}
-          cvStyles={cvStyles}
           onProjectUpdate={updateProject}
           onAddCharacter={addCharacter}
           onDeleteCharacter={deleteCharacter}
           onDeleteChapters={onDeleteChapters}
-          onUpdateCharacterCV={updateCharacterCV}
           onToggleCharacterStyleLock={toggleCharacterStyleLock}
           onBulkUpdateCharacterStylesForCV={bulkUpdateCharacterStylesForCV}
           onNavigateToDashboard={onNavigateToDashboard}
