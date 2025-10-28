@@ -65,8 +65,9 @@ export const exportMarkedWav = async (
 export const exportCharacterClips = async (
     rows: VoiceLibraryRowState[],
     project: Project,
-    character: Character,
-    generatedAudioUrls: Record<string, string>
+    characters: Character[],
+    generatedAudioUrls: Record<string, string>,
+    selectedCharacter: Character | null
 ): Promise<void> => {
     const rowsToExport = rows.filter(r => generatedAudioUrls[r.id] && r.originalLineId);
     if (rowsToExport.length === 0) {
@@ -77,6 +78,7 @@ export const exportCharacterClips = async (
     const zip = new JSZip();
     const lineIdMap = new Map<string, ScriptLine>();
     project.chapters.forEach(ch => ch.scriptLines.forEach(line => lineIdMap.set(line.id, line)));
+    const characterMap = new Map(characters.map(c => [c.id, c]));
 
     for (const row of rowsToExport) {
         const lineId = row.originalLineId!;
@@ -85,6 +87,9 @@ export const exportCharacterClips = async (
         if (line?.audioBlobId) {
             const audioBlob = await db.audioBlobs.get(line.audioBlobId);
             if (audioBlob) {
+                const character = line.characterId ? characterMap.get(line.characterId) : null;
+                if (!character) continue;
+
                 const baseName = character.cvName
                     ? `【${character.cvName}-${character.name}】${line.text}`
                     : `【${character.name}】${line.text}`;
@@ -97,7 +102,10 @@ export const exportCharacterClips = async (
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${sanitizeFilename(`${project.name}_${character.name}_片段`)}.zip`;
+    const filename = selectedCharacter
+        ? `${sanitizeFilename(`${project.name}_${selectedCharacter.name}_片段`)}.zip`
+        : `${sanitizeFilename(`${project.name}_所有角色片段`)}.zip`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

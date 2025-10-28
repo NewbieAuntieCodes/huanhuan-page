@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useStore } from '../../../store/useStore';
 import { Character, Chapter, ScriptLine } from '../../../types';
@@ -91,11 +90,14 @@ export const useVoiceLibrary = () => {
     
     const charactersInProject = useMemo(() => {
         if (!selectedProjectId) {
-            return characters.filter(c => !c.projectId && c.status !== 'merged' && c.name !== '[静音]' && c.name !== '音效');
+            return characters.filter(c => !c.projectId && c.status !== 'merged' && c.name !== '[静音]' && c.name !== '音效' && c.name !== 'Narrator');
         }
         return characters.filter(c =>
             (c.projectId === selectedProjectId || !c.projectId) &&
-            c.status !== 'merged' && c.name !== '[静音]' && c.name !== '音效'
+            c.status !== 'merged' && 
+            c.name !== '[静音]' && 
+            c.name !== '音效' &&
+            c.name !== 'Narrator'
         );
     }, [characters, selectedProjectId]);
 
@@ -365,10 +367,10 @@ export const useVoiceLibrary = () => {
     };
 
     const handleExportCharacterClips = async () => {
-        if (!currentProject || !selectedCharacter) return;
+        if (!currentProject) return;
         setIsExporting(true);
         try {
-            await exportCharacterClips(rows, currentProject, selectedCharacter, generatedAudioUrls);
+            await exportCharacterClips(rows, currentProject, characters, generatedAudioUrls, selectedCharacter);
         } catch (error) {
             alert(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
         } finally {

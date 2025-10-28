@@ -187,7 +187,7 @@ const VoiceLibraryPage: React.FC = () => {
         </button>
         <button
           onClick={handleExportCharacterClips}
-          disabled={isGenerating || isExporting || !selectedCharacterId || rows.filter(r => generatedAudioUrls[r.id] && r.originalLineId).length === 0}
+          disabled={isGenerating || isExporting || rows.filter(r => generatedAudioUrls[r.id] && r.originalLineId).length === 0}
           className="flex items-center text-sm text-fuchsia-300 hover:text-fuchsia-100 px-3 py-1.5 bg-fuchsia-800/50 hover:bg-fuchsia-700/50 rounded-md disabled:opacity-50"
           title="将当前筛选出的、已有音频的片段批量导出为 mp3 文件"
         >
