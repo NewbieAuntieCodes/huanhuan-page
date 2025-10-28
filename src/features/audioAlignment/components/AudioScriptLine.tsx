@@ -3,7 +3,7 @@ import { ScriptLine, Character, AudioBlob } from '../../../types';
 import { useStore } from '../../../store/useStore';
 import { db } from '../../../db';
 import { isHexColor, getContrastingTextColor } from '../../../lib/colorUtils';
-import { TrashIcon, UploadIcon, PlayIcon, PauseIcon, CheckCircleIcon, XMarkIcon, ArrowDownOnSquareIcon, ArrowUpOnSquareIcon } from '../../../components/ui/icons';
+import { TrashIcon, UploadIcon, PlayIcon, PauseIcon, CheckCircleIcon, XMarkIcon, ArrowDownIcon, ArrowUpIcon } from '../../../components/ui/icons';
 
 interface AudioScriptLineProps {
     line: ScriptLine;
@@ -15,16 +15,22 @@ interface AudioScriptLineProps {
 }
 
 const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, projectId, chapterId, onRequestShiftDown, onRequestShiftUp }) => {
-    const { assignAudioToLine, updateLineAudio, cvStyles, playingLineInfo, setPlayingLine, clearPlayingLine } = useStore(state => ({
+    // FIX: Replaced direct access to `state.cvStyles` (which does not exist on the global state) with a derived value from the current project's `cvStyles`. Fetched `projects` from the store and used `React.useMemo` to find the current project based on the `projectId` prop and extract its `cvStyles` map.
+    const { assignAudioToLine, updateLineAudio, projects, playingLineInfo, setPlayingLine, clearPlayingLine } = useStore(state => ({
         assignAudioToLine: state.assignAudioToLine,
         updateLineAudio: state.updateLineAudio,
-        cvStyles: state.cvStyles,
+        projects: state.projects,
         playingLineInfo: state.playingLineInfo,
         setPlayingLine: state.setPlayingLine,
         clearPlayingLine: state.clearPlayingLine,
     }));
     const [hasAudio, setHasAudio] = useState<boolean>(!!line.audioBlobId);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const cvStyles = React.useMemo(() => {
+        const currentProject = projects.find(p => p.id === projectId);
+        return currentProject?.cvStyles || {};
+    }, [projects, projectId]);
     
     useEffect(() => {
         setHasAudio(!!line.audioBlobId);
@@ -189,7 +195,7 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
                         className="p-2 rounded-full bg-slate-600 hover:bg-teal-500 text-slate-200 hover:text-white transition-colors disabled:opacity-50"
                         title="向上顺移音频"
                     >
-                        <ArrowUpOnSquareIcon className="w-4 h-4" />
+                        <ArrowUpIcon className="w-4 h-4" />
                     </button>
 
                     <button
@@ -198,7 +204,7 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
                         className="p-2 rounded-full bg-slate-600 hover:bg-indigo-500 text-slate-200 hover:text-white transition-colors disabled:opacity-50"
                         title="向下顺移音频"
                     >
-                        <ArrowDownOnSquareIcon className="w-4 h-4" />
+                        <ArrowDownIcon className="w-4 h-4" />
                     </button>
 
                     <button

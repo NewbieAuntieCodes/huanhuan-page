@@ -1,5 +1,3 @@
-import { ScriptLine } from '../types';
-
 // This file is for generic audio processing utilities.
 
 // Encodes an AudioBuffer into a WAV Blob

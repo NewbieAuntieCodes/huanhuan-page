@@ -15,10 +15,11 @@ interface GlobalAudioPlayerProps {
     onSplitRequest: (splitTime: number, lineInfo: { line: ScriptLine; character: Character | undefined; }) => void;
     onMergeRequest: (lineInfo: { line: ScriptLine; character: Character | undefined; }) => void;
     canMerge: boolean;
+    mergeDisabledReason: string;
 }
 
 
-const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({ onSplitRequest, onMergeRequest, canMerge }) => {
+const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({ onSplitRequest, onMergeRequest, canMerge, mergeDisabledReason }) => {
     const { playingLineInfo, clearPlayingLine } = useStore(state => ({
         playingLineInfo: state.playingLineInfo,
         clearPlayingLine: state.clearPlayingLine,
@@ -181,6 +182,17 @@ const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({ onSplitRequest, o
         };
     }, [isPlaying, audioBuffer, animateProgress, drawWaveform]);
 
+    // Effect to manually update waveform when seeking while paused
+    useEffect(() => {
+        // Redraw waveform if currentTime is changed manually while paused
+        if (audioRef.current?.paused && audioBuffer && duration > 0) {
+            const progress = currentTime / duration;
+            if (!isNaN(progress)) {
+                drawWaveform(audioBuffer, progress);
+            }
+        }
+    }, [currentTime, duration, audioBuffer, drawWaveform]);
+
 
     // Initial draw when audio buffer is ready
     useEffect(() => {
@@ -331,7 +343,13 @@ const GlobalAudioPlayer: React.FC<GlobalAudioPlayerProps> = ({ onSplitRequest, o
             <button onClick={() => canSplit && playingLineInfo && onSplitRequest(currentTime, playingLineInfo)} disabled={!canSplit} className="p-3 bg-slate-600 hover:bg-orange-500 rounded-full mr-4 disabled:opacity-50 disabled:cursor-not-allowed" aria-label={"Split audio at current position"}>
                 <ScissorsIcon className="w-6 h-6 text-white" />
             </button>
-            <button onClick={() => canMerge && playingLineInfo && onMergeRequest(playingLineInfo)} disabled={!canMerge} className="p-3 bg-slate-600 hover:bg-indigo-500 rounded-full mr-4 disabled:opacity-50 disabled:cursor-not-allowed" aria-label={"与下一行合并"}>
+            <button 
+                onClick={() => canMerge && playingLineInfo && onMergeRequest(playingLineInfo)} 
+                disabled={!canMerge} 
+                className={`p-3 rounded-full mr-4 transition-colors disabled:cursor-not-allowed ${canMerge ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-slate-700 opacity-60'}`}
+                title={mergeDisabledReason}
+                aria-label={mergeDisabledReason}
+            >
                 <ChevronDoubleDownIcon className="w-6 h-6 text-white" />
             </button>
 

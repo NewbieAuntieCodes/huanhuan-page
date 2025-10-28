@@ -3,7 +3,8 @@ import { UploadIcon, CheckCircleIcon, XMarkIcon, TrashIcon, SparklesIcon, Scisso
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import WaveformPlayer from './WaveformPlayer';
 import GeneratedAudioPlayer from './GeneratedAudioPlayer';
-import { VoiceLibraryRowState } from '../VoiceLibraryPage';
+// FIX: Corrected the import path for the `VoiceLibraryRowState` type.
+import { VoiceLibraryRowState } from '../hooks/useVoiceLibrary';
 import { Character } from '../../../types';
 import { isHexColor, getContrastingTextColor } from '../../../lib/colorUtils';
 

@@ -283,6 +283,53 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     setIsAddChaptersModalOpen(false);
   };
 
+  const handleSplitChapter = (chapterId: string, lineId: string) => {
+    applyUndoableProjectUpdate(prevProject => {
+        const chapterIndex = prevProject.chapters.findIndex(c => c.id === chapterId);
+        if (chapterIndex === -1) return prevProject;
+
+        const chapter = prevProject.chapters[chapterIndex];
+        const lineIndex = chapter.scriptLines.findIndex(l => l.id === lineId);
+        if (lineIndex <= 0) { 
+            if(lineIndex === 0) alert("无法在第一行拆分章节。");
+            return prevProject;
+        }
+
+        const linesBefore = chapter.scriptLines.slice(0, lineIndex);
+        const linesAfter = chapter.scriptLines.slice(lineIndex);
+
+        const regenerateRawContent = (lines: ScriptLine[]): string => {
+            const characterMap = new Map(characters.map(c => [c.id, c.name]));
+            return lines.map(line => {
+                const characterName = line.characterId ? characterMap.get(line.characterId) : null;
+                if (characterName && characterName.toLowerCase() !== 'narrator') {
+                    return `【${characterName}】${line.text}`;
+                }
+                return line.text;
+            }).join('\n');
+        };
+
+        const updatedOriginalChapter = {
+            ...chapter,
+            scriptLines: linesBefore,
+            rawContent: regenerateRawContent(linesBefore),
+        };
+
+        const newChapter: Chapter = {
+            id: `ch_${Date.now()}`,
+            title: `${chapter.title} (续)`,
+            scriptLines: linesAfter,
+            rawContent: regenerateRawContent(linesAfter),
+        };
+
+        const newChapters = [...prevProject.chapters];
+        newChapters[chapterIndex] = updatedOriginalChapter;
+        newChapters.splice(chapterIndex + 1, 0, newChapter);
+
+        return { ...prevProject, chapters: newChapters };
+    });
+};
+
   const undoableDeleteChapters = (chapterIds: string[]) => {
     applyUndoableProjectUpdate(prev => {
         const newSelectedChapterId = chapterIds.includes(selectedChapterId ?? '') ? null : selectedChapterId;
@@ -377,6 +424,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
                   onSplitScriptLine={handleSplitScriptLine}
                   onMergeAdjacentLines={handleMergeAdjacentLines}
                   onOpenCvModalForCharacterLine={(char) => onOpenCharacterAndCvStyleModal(char)}
+                  onSplitChapterAtLine={handleSplitChapter}
                 />
               }
               initialLeftWidthPercent={40}

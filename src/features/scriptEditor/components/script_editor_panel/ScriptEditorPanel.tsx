@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Chapter, ScriptLine, Character } from '../../../../types';
 import ScriptLineItem from './ScriptLineItem';
 import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
-import { SplitIcon, UndoIcon, RedoIcon, PencilIcon, SaveIcon } from '../../../../components/ui/icons'; 
+import { SplitIcon, UndoIcon, RedoIcon, PencilIcon, SaveIcon, ScissorsIcon } from '../../../../components/ui/icons'; 
 // FIX: Corrected import path for EditorContext
 import { useEditorContext } from '../../contexts/EditorContext';
 
@@ -14,6 +14,7 @@ interface ScriptEditorPanelProps {
   onMergeAdjacentLines: (chapterId: string, lineId: string) => void;
   // Callback for opening CV modal, passed from EditorPage's useEditorModals hook
   onOpenCvModalForCharacterLine: (character: Character) => void;
+  onSplitChapterAtLine: (chapterId: string, lineId: string) => void;
 }
 
 const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
@@ -22,6 +23,7 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
   onSplitScriptLine,
   onMergeAdjacentLines,
   onOpenCvModalForCharacterLine,
+  onSplitChapterAtLine,
 }) => {
   const {
     currentProject,
@@ -101,6 +103,12 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
           
           onSplitScriptLine(selectedChapter.id, focusedScriptLineId, splitIndex);
       }
+    }
+  };
+
+  const handleSplitChapterClick = () => {
+    if (selectedChapter && focusedScriptLineId) {
+      onSplitChapterAtLine(selectedChapter.id, focusedScriptLineId);
     }
   };
   
@@ -203,6 +211,15 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
           >
             <SplitIcon className="w-4 h-4 mr-1.5" />
             拆分行
+          </button>
+          <button
+            onClick={handleSplitChapterClick}
+            disabled={!canSplitFocusedLine || isEditingHeaderTitle}
+            title={canSplitFocusedLine ? "从当前行开始拆分为新章节" : "请先将光标置于要作为新章节开头的行内"}
+            className="flex items-center px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ScissorsIcon className="w-4 h-4 mr-1.5" />
+            拆章
           </button>
         </div>
       </div>

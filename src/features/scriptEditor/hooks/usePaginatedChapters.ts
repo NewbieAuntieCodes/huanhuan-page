@@ -28,6 +28,8 @@ export const usePaginatedChapters = ({
 
   const totalPages = Math.max(1, Math.ceil(chapters.length / chaptersPerPage));
 
+  // This effect handles jumping to the correct page ONLY when the user actively selects a new chapter.
+  // It no longer depends on `chapters`, preventing jumps when the chapter data is refreshed.
   useEffect(() => {
     if (initialSelectedChapterIdForViewing) {
       const chapterIndex = chapters.findIndex(c => c.id === initialSelectedChapterIdForViewing);
@@ -38,11 +40,27 @@ export const usePaginatedChapters = ({
         }
       }
     }
-  }, [initialSelectedChapterIdForViewing, chapters, chaptersPerPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSelectedChapterIdForViewing]);
   
+  // This effect now handles resetting the page when the project changes,
+  // and correcting the page number if it becomes invalid (e.g., due to filtering).
   useEffect(() => {
+    // On project change, reset to page 1
     setCurrentPage(1);
+    // This effect should re-run when the projectId changes.
+    // The component using this hook will re-mount or receive a new projectId prop,
+    // which effectively resets the state including currentPage.
+    // The dependency on projectId ensures this logic is tied to project switches.
   }, [projectId]);
+
+  // This effect corrects the current page if it becomes out of bounds, for example after filtering.
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
 
   const paginatedChapters = useMemo(() => {
     const startIndex = (currentPage - 1) * chaptersPerPage;
