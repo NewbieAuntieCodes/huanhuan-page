@@ -50,35 +50,40 @@ export const useScriptLineEditor = (
         const currentLine = chapter.scriptLines[lineIndex];
         const originalCharacter = characters.find(c => c.id === currentLine.characterId);
         
-        // Case 1: Changing TO Narrator (implements merge and quote conversion)
+        // Case 1: Changing TO Narrator
         if (newCharacter.id === narratorCharacter?.id) {
             let convertedText = currentLine.text;
-            if (originalCharacter?.name !== 'Narrator') {
+            const isOriginallyCharacter = originalCharacter && originalCharacter.name !== 'Narrator';
+            if (isOriginallyCharacter) {
                  const trimmedText = convertedText.trim();
+                 // If it's quoted, unquote it.
                  if (trimmedText.startsWith('“') && trimmedText.endsWith('”')) {
                     const content = trimmedText.substring(1, trimmedText.length - 1);
-                    convertedText = convertedText.replace(trimmedText, `‘${content}’`);
+                    // This is safer than .replace() if content is repeated
+                    const before = convertedText.substring(0, convertedText.indexOf(trimmedText));
+                    const after = convertedText.substring(convertedText.indexOf(trimmedText) + trimmedText.length);
+                    convertedText = before + content + after;
                 }
             }
 
             const previousLine = lineIndex > 0 ? chapter.scriptLines[lineIndex - 1] : null;
             const nextLine = lineIndex < chapter.scriptLines.length - 1 ? chapter.scriptLines[lineIndex + 1] : null;
 
-            const isPrevNarrator = previousLine?.characterId === narratorCharacter?.id;
-            const isNextNarrator = nextLine?.characterId === narratorCharacter?.id;
+            const isPrevNarrator = !previousLine?.characterId || previousLine?.characterId === narratorCharacter?.id;
+            const isNextNarrator = !nextLine?.characterId || nextLine?.characterId === narratorCharacter?.id;
 
             let newScriptLines = [...chapter.scriptLines];
 
             if (isPrevNarrator && isNextNarrator) {
-                const combinedText = `${previousLine!.text}${convertedText}${nextLine!.text}`;
+                const combinedText = `${previousLine!.text}\n${convertedText}\n${nextLine!.text}`;
                 newScriptLines[lineIndex - 1] = { ...previousLine!, text: combinedText };
                 newScriptLines = newScriptLines.filter(l => l.id !== currentLine.id && l.id !== nextLine!.id);
             } else if (isPrevNarrator) {
-                const combinedText = `${previousLine!.text}${convertedText}`;
+                const combinedText = `${previousLine!.text}\n${convertedText}`;
                 newScriptLines[lineIndex - 1] = { ...previousLine!, text: combinedText };
                 newScriptLines = newScriptLines.filter(l => l.id !== currentLine.id);
             } else if (isNextNarrator) {
-                const combinedText = `${convertedText}${nextLine!.text}`;
+                const combinedText = `${convertedText}\n${nextLine!.text}`;
                 newScriptLines[lineIndex] = { ...currentLine, text: combinedText, characterId: newCharacterId };
                 newScriptLines = newScriptLines.filter(l => l.id !== nextLine!.id);
             } else {
@@ -90,14 +95,16 @@ export const useScriptLineEditor = (
             return project;
         } 
         
-        // Case 2: Changing FROM Narrator or between other characters
+        // Case 2: Changing FROM Narrator/unassigned TO a character
         else {
             let newText = currentLine.text;
-            if (originalCharacter?.id === narratorCharacter?.id) {
+            const isOriginallyNarrator = !originalCharacter || originalCharacter.id === narratorCharacter?.id;
+            
+            if (isOriginallyNarrator) {
                 const trimmedText = newText.trim();
-                if (trimmedText.startsWith('‘') && trimmedText.endsWith('’')) {
-                    const content = trimmedText.substring(1, trimmedText.length - 1);
-                    newText = newText.replace(trimmedText, `“${content}”`);
+                // If it's not already a dialogue line, wrap it in quotes.
+                if (trimmedText && !trimmedText.startsWith('“') && !trimmedText.startsWith('「')) {
+                    newText = `“${newText}”`;
                 }
             }
             
@@ -197,10 +204,26 @@ export const useScriptLineEditor = (
     });
   }, [applyUndoableProjectUpdate]);
 
+  const handleDeleteScriptLine = useCallback((chapterId: string, lineId: string) => {
+    applyUndoableProjectUpdate(prevProject => ({
+      ...prevProject,
+      chapters: prevProject.chapters.map(ch => {
+        if (ch.id === chapterId) {
+          return {
+            ...ch,
+            scriptLines: ch.scriptLines.filter(l => l.id !== lineId)
+          };
+        }
+        return ch;
+      })
+    }));
+  }, [applyUndoableProjectUpdate]);
+
   return {
     handleUpdateScriptLineText,
     handleAssignCharacterToLine,
     handleSplitScriptLine,
     handleMergeAdjacentLines,
+    handleDeleteScriptLine,
   };
 };

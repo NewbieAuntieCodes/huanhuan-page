@@ -149,6 +149,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     handleAssignCharacterToLine,
     handleSplitScriptLine,
     handleMergeAdjacentLines,
+    handleDeleteScriptLine,
   } = useScriptLineEditor(
     currentProject,
     projectCharacters,
@@ -423,6 +424,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
                   onAssignCharacterToLine={handleAssignCharacterToLine}
                   onSplitScriptLine={handleSplitScriptLine}
                   onMergeAdjacentLines={handleMergeAdjacentLines}
+                  onDeleteScriptLine={handleDeleteScriptLine}
                   onOpenCvModalForCharacterLine={(char) => onOpenCharacterAndCvStyleModal(char)}
                   onSplitChapterAtLine={handleSplitChapter}
                 />

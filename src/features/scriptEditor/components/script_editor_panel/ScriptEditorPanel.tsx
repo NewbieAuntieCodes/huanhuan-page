@@ -12,6 +12,7 @@ interface ScriptEditorPanelProps {
   onAssignCharacterToLine: (chapterId: string, lineId: string, characterId: string) => void;
   onSplitScriptLine: (chapterId: string, lineId: string, splitIndex: number) => void;
   onMergeAdjacentLines: (chapterId: string, lineId: string) => void;
+  onDeleteScriptLine: (chapterId: string, lineId: string) => void;
   // Callback for opening CV modal, passed from EditorPage's useEditorModals hook
   onOpenCvModalForCharacterLine: (character: Character) => void;
   onSplitChapterAtLine: (chapterId: string, lineId: string) => void;
@@ -22,6 +23,7 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
   onAssignCharacterToLine,
   onSplitScriptLine,
   onMergeAdjacentLines,
+  onDeleteScriptLine,
   onOpenCvModalForCharacterLine,
   onSplitChapterAtLine,
 }) => {
@@ -241,6 +243,7 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               onUpdateText={(lineId, newText) => onUpdateScriptLineText(selectedChapter.id, lineId, newText)}
               onAssignCharacter={(lineId, charId) => onAssignCharacterToLine(selectedChapter.id, lineId, charId)}
               onMergeLines={(lineId) => onMergeAdjacentLines(selectedChapter.id, lineId)}
+              onDelete={(lineId) => onDeleteScriptLine(selectedChapter.id, lineId)}
               // FIX: Removed props that do not exist on ScriptLineItem.
               onOpenCvModalForCharacter={onOpenCvModalForCharacterLine} // Direct prop
               cvStyles={cvStyles} // From context

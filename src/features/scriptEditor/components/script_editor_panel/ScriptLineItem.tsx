@@ -9,6 +9,7 @@ interface ScriptLineItemProps {
   onUpdateText: (lineId: string, newText: string) => void;
   onAssignCharacter: (lineId: string, characterId: string) => void;
   onMergeLines: (lineId: string) => void;
+  onDelete: (lineId: string) => void;
   onOpenCvModalForCharacter: (character: Character) => void; // This will open the unified modal
   cvStyles: Record<string, { bgColor: string, textColor: string }>;
   isFocusedForSplit?: boolean; 
@@ -31,6 +32,7 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   onUpdateText,
   onAssignCharacter,
   onMergeLines,
+  onDelete,
   onOpenCvModalForCharacter, // Renamed from onOpenCvModalForCharacterLine for consistency
   cvStyles,
   onFocusChange,
@@ -137,9 +139,13 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
 
   const handleDivBlur = (e: React.FocusEvent<HTMLDivElement>) => {
     const newText = e.currentTarget.innerText;
-    if (newText !== line.text) {
+    
+    if (newText.trim() === '') {
+        onDelete(line.id);
+    } else if (newText !== line.text) {
       onUpdateText(line.id, newText);
     }
+    
     // Delay blur slightly to allow other interactions (like split button) to register if needed
     // This specific timeout might not be strictly necessary for the split button if it relies on context state
     // which is updated on focus.
