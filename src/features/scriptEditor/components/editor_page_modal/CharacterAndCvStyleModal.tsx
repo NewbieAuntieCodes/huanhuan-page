@@ -51,50 +51,55 @@ const CharacterAndCvStyleModal: React.FC<CharacterAndCvStyleModalProps> = ({
   const [isCharStyleLocked, setIsCharStyleLocked] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
-      if (characterToEdit) {
-        setCharName(characterToEdit.name);
-        setCharDescription(characterToEdit.description || '');
-        
-        setCharBgColorInput(characterToEdit.color || defaultCharPreset.bgColorClass);
-        setCharTextColorInput(characterToEdit.textColor || defaultCharPreset.textColorClass);
-        setCustomCharBgInputText(characterToEdit.color || defaultCharPreset.bgColorClass);
-        setCustomCharTextInputText(characterToEdit.textColor || defaultCharPreset.textColorClass);
+    // This effect initializes the form state whenever the character to edit changes.
+    // It is intentionally not dependent on `isOpen` to prevent resetting user input
+    // on re-renders while the modal is open.
+    if (characterToEdit) {
+      setCharName(characterToEdit.name);
+      setCharDescription(characterToEdit.description || '');
+      
+      setCharBgColorInput(characterToEdit.color || defaultCharPreset.bgColorClass);
+      setCharTextColorInput(characterToEdit.textColor || defaultCharPreset.textColorClass);
+      setCustomCharBgInputText(characterToEdit.color || defaultCharPreset.bgColorClass);
+      setCustomCharTextInputText(characterToEdit.textColor || defaultCharPreset.textColorClass);
 
-        const currentCvName = characterToEdit.cvName || '';
-        setCvNameInput(currentCvName);
-        setIsCharStyleLocked(characterToEdit.isStyleLockedToCv || false);
+      const currentCvName = characterToEdit.cvName || '';
+      setCvNameInput(currentCvName);
+      setIsCharStyleLocked(characterToEdit.isStyleLockedToCv || false);
 
-        if (currentCvName && cvStyles[currentCvName]) {
-          setCvBgColorInput(cvStyles[currentCvName].bgColor);
-          setCvTextColorInput(cvStyles[currentCvName].textColor);
-          setCustomCvBgInputText(cvStyles[currentCvName].bgColor);
-          setCustomCvTextInputText(cvStyles[currentCvName].textColor);
-        } else {
-          setCvBgColorInput(DEFAULT_CV_BG_CLASS);
-          setCvTextColorInput(DEFAULT_CV_TEXT_CLASS);
-          setCustomCvBgInputText(DEFAULT_CV_BG_CLASS);
-          setCustomCvTextInputText(DEFAULT_CV_TEXT_CLASS);
-        }
-        
-      } else { 
-        setCharName('');
-        setCharDescription('');
-        setCharBgColorInput(defaultCharPreset.bgColorClass);
-        setCharTextColorInput(defaultCharPreset.textColorClass);
-        setCustomCharBgInputText(defaultCharPreset.bgColorClass);
-        setCustomCharTextInputText(defaultCharPreset.textColorClass);
-        
-        setCvNameInput('');
+      if (currentCvName && cvStyles[currentCvName]) {
+        setCvBgColorInput(cvStyles[currentCvName].bgColor);
+        setCvTextColorInput(cvStyles[currentCvName].textColor);
+        setCustomCvBgInputText(cvStyles[currentCvName].bgColor);
+        setCustomCvTextInputText(cvStyles[currentCvName].textColor);
+      } else {
         setCvBgColorInput(DEFAULT_CV_BG_CLASS);
         setCvTextColorInput(DEFAULT_CV_TEXT_CLASS);
         setCustomCvBgInputText(DEFAULT_CV_BG_CLASS);
         setCustomCvTextInputText(DEFAULT_CV_TEXT_CLASS);
-        setIsCharStyleLocked(false);
       }
+      
+    } else { 
+      // This block runs when the modal is opened for a *new* character (characterToEdit is null),
+      // or when it's closed and characterToEdit becomes null.
+      setCharName('');
+      setCharDescription('');
+      setCharBgColorInput(defaultCharPreset.bgColorClass);
+      setCharTextColorInput(defaultCharPreset.textColorClass);
+      setCustomCharBgInputText(defaultCharPreset.bgColorClass);
+      setCustomCharTextInputText(defaultCharPreset.textColorClass);
+      
+      setCvNameInput('');
+      setCvBgColorInput(DEFAULT_CV_BG_CLASS);
+      setCvTextColorInput(DEFAULT_CV_TEXT_CLASS);
+      setCustomCvBgInputText(DEFAULT_CV_BG_CLASS);
+      setCustomCvTextInputText(DEFAULT_CV_TEXT_CLASS);
+      setIsCharStyleLocked(false);
     }
+  // We only want this to run when the character being edited changes, not on every render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [characterToEdit, isOpen]);
+  }, [characterToEdit]);
+
 
   useEffect(() => {
     if (isOpen && !isCharStyleLocked) {
@@ -229,6 +234,7 @@ const CharacterAndCvStyleModal: React.FC<CharacterAndCvStyleModalProps> = ({
       cvName: cvNameInput.trim(),
       isStyleLockedToCv: isCharStyleLocked,
       status: characterToEdit ? characterToEdit.status : 'active',
+      projectId: characterToEdit?.projectId,
     };
 
     onSave(characterDataToSave, cvNameInput.trim(), cvBgColorInput, cvTextColorInput);
