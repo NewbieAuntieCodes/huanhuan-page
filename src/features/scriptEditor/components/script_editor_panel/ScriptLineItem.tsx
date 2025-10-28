@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ScriptLine, Character } from '../../../../types';
-import { UserCircleIcon, MagnifyingGlassIcon } from '../../../../components/ui/icons';
+import { UserCircleIcon, MagnifyingGlassIcon, ChevronDownIcon } from '../../../../components/ui/icons';
 import { isHexColor, getContrastingTextColor } from '../../../../lib/colorUtils';
 
 interface ScriptLineItemProps {
@@ -13,6 +13,7 @@ interface ScriptLineItemProps {
   onOpenCvModalForCharacter: (character: Character) => void; // This will open the unified modal
   cvStyles: Record<string, { bgColor: string, textColor: string }>;
   isFocusedForSplit?: boolean; 
+  onUpdateSoundType: (lineId: string, soundType: string) => void;
   onFocusChange: (lineId: string | null) => void; 
 }
 
@@ -35,6 +36,7 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   onDelete,
   onOpenCvModalForCharacter, // Renamed from onOpenCvModalForCharacterLine for consistency
   cvStyles,
+  onUpdateSoundType,
   onFocusChange,
 }) => {
   const character = characters.find(c => c.id === line.characterId);
@@ -46,23 +48,29 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const [isSoundTypeDropdownOpen, setIsSoundTypeDropdownOpen] = useState(false);
+  const soundTypeDropdownRef = useRef<HTMLDivElement>(null);
+  const soundOptions = ['清除', 'OS', '电话音', '系统音', '新闻', '电视', '广播', '自定义'];
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
+      if (soundTypeDropdownRef.current && !soundTypeDropdownRef.current.contains(event.target as Node)) {
+        setIsSoundTypeDropdownOpen(false);
+      }
     };
-    if (isDropdownOpen) {
+    if (isDropdownOpen || isSoundTypeDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      // Focus the search input when dropdown opens
-      setTimeout(() => searchInputRef.current?.focus(), 0); 
+      if (isDropdownOpen) setTimeout(() => searchInputRef.current?.focus(), 0); 
     } else {
       setSearchTerm(''); // Reset search on close
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isDropdownOpen]);
+  }, [isDropdownOpen, isSoundTypeDropdownOpen]);
 
   const filteredCharacters = characters.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -146,11 +154,8 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
       onUpdateText(line.id, newText);
     }
     
-    // Delay blur slightly to allow other interactions (like split button) to register if needed
-    // This specific timeout might not be strictly necessary for the split button if it relies on context state
-    // which is updated on focus.
     setTimeout(() => {
-        if (document.activeElement !== e.target) { // Check if focus truly moved away from this element
+        if (document.activeElement !== e.target) {
              onFocusChange(null);
         }
     }, 150); 
@@ -165,7 +170,7 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
     contentEditableClasses += ' bg-slate-800 text-slate-500 italic';
   } else if (isNarrator) {
     contentEditableClasses += ' bg-slate-700 text-slate-100';
-  } else if (character) { // This handles all other characters like dialogue, sound effects etc.
+  } else if (character) {
     const charBg = character.color; 
     const charText = character.textColor; 
 
@@ -181,21 +186,28 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
         } else { 
             contentEditableClasses += ` ${charText}`;
         }
-    } else { // No charText defined
+    } else {
         if (isHexColor(charBg)) { 
             contentEditableStyle.color = getContrastingTextColor(charBg);
-        } else { // charBg is a class, derive text based on common Tailwind dark shades
-            const darkBgPatterns = ['-700', '-800', '-900', 'slate-600', 'gray-600']; // Add more as needed
+        } else {
+            const darkBgPatterns = ['-700', '-800', '-900', 'slate-600', 'gray-600'];
             const isDarkBg = charBg && darkBgPatterns.some(pattern => charBg.includes(pattern));
-            contentEditableClasses += isDarkBg ? ' text-slate-100' : ' text-slate-800'; // Default to dark text for lighter unknown BGs
+            contentEditableClasses += isDarkBg ? ' text-slate-100' : ' text-slate-800';
         }
     }
-  } else { // Fallback for unassigned character
+  } else {
     contentEditableClasses += ' bg-slate-700 text-slate-100';
   }
+
+  const handleToggleOS = () => {
+    const newSoundType = line.soundType === 'OS' ? '' : 'OS';
+    onUpdateSoundType(line.id, newSoundType);
+  };
   
+  const isLit = !!line.soundType && line.soundType !== '清除';
+
   return (
-    <div className={`p-3 mb-2 rounded-lg border flex items-start gap-3 transition-all duration-150 ${isSilentLine ? 'border-slate-800 opacity-70' : 'border-slate-700'} hover:border-slate-600 ${line.isAiAudioLoading ? 'opacity-70' : ''}`}>
+    <div className={`p-3 mb-2 rounded-lg border flex items-center gap-3 transition-all duration-150 ${isSilentLine ? 'border-slate-800 opacity-70' : 'border-slate-700'} hover:border-slate-600 ${line.isAiAudioLoading ? 'opacity-70' : ''}`}>
       
       <div className="flex-shrink-0 w-48 space-y-1">
         <div className="flex items-center space-x-1 w-full">
@@ -210,7 +222,7 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
                 </span>
             ) : (
                 <button
-                    onClick={() => onOpenCvModalForCharacter(character)} // Opens unified modal
+                    onClick={() => onOpenCvModalForCharacter(character)}
                     title={character.cvName ? `CV: ${character.cvName} (编辑CV与角色样式)` : `为角色 ${character.name} 添加CV并编辑样式`}
                     className={`flex-shrink-0 flex items-center justify-center text-xs px-1.5 py-2 h-9 rounded truncate max-w-[80px] ${cvButtonAppliedStyle.className}`}
                     style={cvButtonAppliedStyle.style}
@@ -314,19 +326,59 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
         </div>
       </div>
 
-      <div className="flex-grow flex flex-col">
-        <div
-            contentEditable
-            suppressContentEditableWarning
-            onFocus={handleDivFocus}
-            onBlur={handleDivBlur}
-            className={contentEditableClasses}
-            style={contentEditableStyle}
-            dangerouslySetInnerHTML={{ __html: line.text }}
-            aria-label={`脚本行文本: ${line.text.substring(0,50)}... ${character ? `角色: ${character.name}` : '未分配角色'}`}
-        />
-      </div>
+      <div
+          contentEditable
+          suppressContentEditableWarning
+          onFocus={handleDivFocus}
+          onBlur={handleDivBlur}
+          className={contentEditableClasses}
+          style={contentEditableStyle}
+          dangerouslySetInnerHTML={{ __html: line.text }}
+          aria-label={`脚本行文本: ${line.text.substring(0,50)}... ${character ? `角色: ${character.name}` : '未分配角色'}`}
+      />
       
+      <div className="relative flex-shrink-0" style={{width: '6rem'}} ref={soundTypeDropdownRef}>
+        <div className="flex w-full h-9 rounded-md border border-slate-600 overflow-hidden">
+            <button
+              onClick={handleToggleOS}
+              className={`flex-grow h-full flex items-center justify-center px-2 text-xs transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:z-10
+                ${isLit ? 'bg-orange-500 text-white font-semibold' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
+            >
+              <span className="truncate">{line.soundType || 'OS'}</span>
+            </button>
+            <button
+                onClick={() => setIsSoundTypeDropdownOpen(prev => !prev)}
+                className={`flex-shrink-0 h-full flex items-center justify-center px-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:z-10 border-l 
+                  ${isLit ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600' : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600'}`}
+                aria-label="选择音效类型"
+            >
+              <ChevronDownIcon className="w-3.5 h-3.5" />
+            </button>
+        </div>
+
+        {isSoundTypeDropdownOpen && (
+          <div className="absolute z-20 mt-1 w-full bg-slate-800 rounded-md shadow-lg border border-slate-600 max-h-60 overflow-y-auto">
+            <ul className="py-1">
+              {soundOptions.map(option => (
+                <li key={option}>
+                  <button
+                    onClick={() => {
+                      onUpdateSoundType(line.id, option === '清除' ? '' : option);
+                      setIsSoundTypeDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-600 ${
+                        (line.soundType === option || ((!line.soundType || line.soundType === '') && option === '清除'))
+                        ? 'bg-sky-600 text-white' : 'text-slate-200'}`}
+                  >
+                    {option}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 };

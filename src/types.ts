@@ -29,6 +29,7 @@ export interface ScriptLine {
   isAiAudioLoading: boolean;
   isAiAudioSynced: boolean; // True if current text matches generated/assigned audio
   isTextModifiedManual: boolean; // True if user manually edited text after initial load/AI annotation
+  soundType?: string; // Off-screen / Off-stage sound type (e.g., 'OS', '电话音')
 }
 
 export interface Chapter {

@@ -32,6 +32,13 @@ export const useScriptLineEditor = (
     }));
   }, [updateLineInProject]);
 
+  const handleUpdateSoundType = useCallback((chapterId: string, lineId: string, newSoundType: string) => {
+    updateLineInProject(chapterId, lineId, line => ({
+      ...line,
+      soundType: newSoundType,
+    }));
+  }, [updateLineInProject]);
+
   const handleAssignCharacterToLine = useCallback((chapterId: string, lineId: string, newCharacterId: string) => {
     const narratorCharacter = characters.find(c => c.name === 'Narrator');
     const newCharacter = characters.find(c => c.id === newCharacterId);
@@ -225,5 +232,6 @@ export const useScriptLineEditor = (
     handleSplitScriptLine,
     handleMergeAdjacentLines,
     handleDeleteScriptLine,
+    handleUpdateSoundType,
   };
 };

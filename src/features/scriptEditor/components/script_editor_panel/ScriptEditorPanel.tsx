@@ -16,6 +16,7 @@ interface ScriptEditorPanelProps {
   // Callback for opening CV modal, passed from EditorPage's useEditorModals hook
   onOpenCvModalForCharacterLine: (character: Character) => void;
   onSplitChapterAtLine: (chapterId: string, lineId: string) => void;
+  onUpdateSoundType: (chapterId: string, lineId: string, soundType: string) => void;
 }
 
 const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
@@ -26,6 +27,7 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
   onDeleteScriptLine,
   onOpenCvModalForCharacterLine,
   onSplitChapterAtLine,
+  onUpdateSoundType,
 }) => {
   const {
     currentProject,
@@ -248,6 +250,7 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               onOpenCvModalForCharacter={onOpenCvModalForCharacterLine} // Direct prop
               cvStyles={cvStyles} // From context
               isFocusedForSplit={focusedScriptLineId === line.id} // From context
+              onUpdateSoundType={(lineId, soundType) => onUpdateSoundType(selectedChapter.id, lineId, soundType)}
               onFocusChange={setFocusedScriptLineId} // From context
             />
           ))
