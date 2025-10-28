@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useStore } from '../../store/useStore';
 import VoiceLibraryRow from './components/VoiceLibraryRow';
 import { ChevronLeftIcon, SparklesIcon, CheckCircleIcon, XMarkIcon, PlusIcon, MagnifyingGlassIcon, ArrowDownTrayIcon } from '../../components/ui/icons';
@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import ExportVoiceLibraryModal from './components/ExportVoiceLibraryModal';
 import { useVoiceLibrary } from './hooks/useVoiceLibrary';
 import { VoiceLibraryRowState } from './hooks/useVoiceLibrary'; // Import type from hook
+import { ScriptLine } from '../../types';
 
 const VoiceLibraryPage: React.FC = () => {
   const { navigateTo } = useStore(state => ({
@@ -80,6 +81,15 @@ const VoiceLibraryPage: React.FC = () => {
     setCharacterSearchTerm('');
   };
 
+  const characterMap = useMemo(() => new Map(charactersInProject.map(c => [c.id, c])), [charactersInProject]);
+  const lineMap = useMemo(() => {
+      if (!currentProject) return new Map();
+      const map = new Map<string, ScriptLine>();
+      currentProject.chapters.forEach(ch => ch.scriptLines.forEach(line => map.set(line.id, line)));
+      return map;
+  }, [currentProject]);
+
+
   return (
     <div className="h-full flex flex-col bg-slate-900 text-slate-100">
       <header className="flex items-center justify-between p-4 border-b border-slate-800 flex-shrink-0">
@@ -124,7 +134,7 @@ const VoiceLibraryPage: React.FC = () => {
               disabled={!currentProject}
               className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:ring-sky-500 focus:border-sky-500 p-2 flex justify-between items-center disabled:opacity-50"
             >
-              <span className="truncate">{selectedCharacter ? selectedCharacter.name : (currentProject ? '选择角色...' : '无项目')}</span>
+              <span className="truncate">{selectedCharacter ? selectedCharacter.name : (currentProject ? '所有角色' : '无项目')}</span>
               <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             {isCharacterDropdownOpen && (
@@ -142,6 +152,9 @@ const VoiceLibraryPage: React.FC = () => {
                   </div>
                 </div>
                 <ul className="overflow-y-auto">
+                   <li onClick={() => handleCharacterSelection('')} className="px-3 py-2 text-sm text-sky-300 hover:bg-slate-700 cursor-pointer">
+                        显示所有角色
+                    </li>
                   {filteredCharactersForDropdown.length === 0 ? (
                     <li className="px-3 py-2 text-sm text-slate-400">未找到角色</li>
                   ) : (
@@ -166,7 +179,7 @@ const VoiceLibraryPage: React.FC = () => {
             onChange={(e) => setChapterFilter(e.target.value)}
             placeholder="例如: 405 或 405-420"
             className="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:ring-sky-500 focus:border-sky-500 p-2 w-48"
-            disabled={!selectedCharacterId}
+            disabled={!currentProject}
           />
         </div>
         <button onClick={addEmptyRow} className="flex items-center text-sm text-green-300 hover:text-green-100 px-3 py-1.5 bg-green-800/50 hover:bg-green-700/50 rounded-md">
@@ -193,15 +206,18 @@ const VoiceLibraryPage: React.FC = () => {
         <div className="p-4 space-y-3">
           {rows.length === 0 ? (
             <div className="text-center py-10 text-slate-500">
-              <p>{selectedCharacterId ? '此角色在此章节筛选条件下没有台词。' : '请从上方选择一个角色以加载台词。'}</p>
+              <p>{currentProject ? '当前筛选条件下没有台词。' : '请先选择一个项目。'}</p>
               <p>或点击“添加空行”手动创建。</p>
             </div>
           ) : (
-            rows.map(row => (
+            rows.map(row => {
+              const line = row.originalLineId ? lineMap.get(row.originalLineId) : null;
+              const characterForRow = line?.characterId ? characterMap.get(line.characterId) : null;
+              return (
               <VoiceLibraryRow
                 key={row.id}
                 row={{ ...row, audioUrl: generatedAudioUrls[row.id] || null }}
-                character={selectedCharacter}
+                character={characterForRow || null}
                 isBatchGenerating={isGenerating}
                 onTextChange={(text) => handleTextChange(row.id, text)}
                 onFileUpload={(file) => handleUpload(row.id, file)}
@@ -213,7 +229,7 @@ const VoiceLibraryPage: React.FC = () => {
                 activePlayerKey={activePlayerKey}
                 setActivePlayerKey={setActivePlayerKey}
               />
-            ))
+            )})
           )}
         </div>
       </main>

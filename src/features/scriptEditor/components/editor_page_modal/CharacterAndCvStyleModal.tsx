@@ -68,15 +68,17 @@ const CharacterAndCvStyleModal: React.FC<CharacterAndCvStyleModalProps> = ({
       setIsCharStyleLocked(characterToEdit.isStyleLockedToCv || false);
 
       if (currentCvName && cvStyles[currentCvName]) {
+        // If CV name exists and has a style, use it.
         setCvBgColorInput(cvStyles[currentCvName].bgColor);
         setCvTextColorInput(cvStyles[currentCvName].textColor);
         setCustomCvBgInputText(cvStyles[currentCvName].bgColor);
         setCustomCvTextInputText(cvStyles[currentCvName].textColor);
       } else {
-        setCvBgColorInput(DEFAULT_CV_BG_CLASS);
-        setCvTextColorInput(DEFAULT_CV_TEXT_CLASS);
-        setCustomCvBgInputText(DEFAULT_CV_BG_CLASS);
-        setCustomCvTextInputText(DEFAULT_CV_TEXT_CLASS);
+        // If no CV or no style for CV, default CV style to character's own style.
+        setCvBgColorInput(characterToEdit.color || defaultCharPreset.bgColorClass);
+        setCvTextColorInput(characterToEdit.textColor || defaultCharPreset.textColorClass);
+        setCustomCvBgInputText(characterToEdit.color || defaultCharPreset.bgColorClass);
+        setCustomCvTextInputText(characterToEdit.textColor || defaultCharPreset.textColorClass);
       }
       
     } else { 

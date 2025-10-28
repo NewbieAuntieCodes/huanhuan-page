@@ -1,5 +1,5 @@
 // FIX: Changed React import from a named import to a default import to correctly resolve the React namespace for types like React.ChangeEvent.
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Project, Character, Chapter, ScriptLine } from '../../../types';
 
 interface UseAudioFileMatcherProps {
@@ -34,6 +34,12 @@ export const useAudioFileMatcher = ({
   const [isCvMatchLoading, setIsCvMatchLoading] = useState(false);
   const [isCharacterMatchLoading, setIsCharacterMatchLoading] = useState(false);
   const [isChapterMatchLoading, setIsChapterMatchLoading] = useState(false);
+
+  const nonAudioCharacterIds = useMemo(() => {
+    return characters
+      .filter(c => c.name === '[静音]' || c.name === '音效')
+      .map(c => c.id);
+  }, [characters]);
 
   const handleFileSelectionForCvMatch = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
@@ -105,7 +111,7 @@ export const useAudioFileMatcher = ({
           const targetLines: { line: ScriptLine; chapterId: string }[] = [];
           for (const chapter of targetChapters) {
               for (const line of chapter.scriptLines) {
-                  if (line.characterId && targetCharacterIds.has(line.characterId)) {
+                  if (line.characterId && targetCharacterIds.has(line.characterId) && !nonAudioCharacterIds.includes(line.characterId)) {
                       targetLines.push({ line, chapterId: chapter.id });
                   }
               }
@@ -129,7 +135,7 @@ export const useAudioFileMatcher = ({
       if (event.target) {
           event.target.value = '';
       }
-  }, [currentProject, characters, assignAudioToLine]);
+  }, [currentProject, characters, assignAudioToLine, nonAudioCharacterIds]);
   
   const handleFileSelectionForCharacterMatch = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = event.target.files;
@@ -232,7 +238,7 @@ export const useAudioFileMatcher = ({
           const targetLines: { line: ScriptLine; chapterId: string }[] = [];
           for (const chapter of targetChapters) {
               for (const line of chapter.scriptLines) {
-                  if (line.characterId && targetCharacterIds.has(line.characterId)) {
+                  if (line.characterId && targetCharacterIds.has(line.characterId) && !nonAudioCharacterIds.includes(line.characterId)) {
                       targetLines.push({ line, chapterId: chapter.id });
                   }
               }
@@ -256,7 +262,7 @@ export const useAudioFileMatcher = ({
       if (event.target) {
           event.target.value = '';
       }
-  }, [currentProject, characters, assignAudioToLine]);
+  }, [currentProject, characters, assignAudioToLine, nonAudioCharacterIds]);
 
   const handleFileSelectionForChapterMatch = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -316,7 +322,9 @@ export const useAudioFileMatcher = ({
         const targetLines: { line: ScriptLine; chapterId: string }[] = [];
         for (const chapter of targetChapters) {
             for (const line of chapter.scriptLines) {
-                targetLines.push({ line, chapterId: chapter.id });
+                if (!nonAudioCharacterIds.includes(line.characterId || '')) {
+                    targetLines.push({ line, chapterId: chapter.id });
+                }
             }
         }
         
@@ -338,7 +346,7 @@ export const useAudioFileMatcher = ({
     if (event.target) {
         event.target.value = '';
     }
-  }, [currentProject, assignAudioToLine]);
+  }, [currentProject, assignAudioToLine, nonAudioCharacterIds]);
 
   return {
     isCvMatchLoading,

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useStore } from '../../../store/useStore';
 import { Character, Chapter, ScriptLine } from '../../../types';
@@ -87,7 +88,17 @@ export const useVoiceLibrary = () => {
     }, [generatedAudioUrls]);
 
     const currentProject = useMemo(() => projects.find(p => p.id === selectedProjectId), [projects, selectedProjectId]);
-    const charactersInProject = useMemo(() => characters.filter(c => c.status !== 'merged' && c.name !== '[静音]' && c.name !== '音效'), [characters]);
+    
+    const charactersInProject = useMemo(() => {
+        if (!selectedProjectId) {
+            return characters.filter(c => !c.projectId && c.status !== 'merged' && c.name !== '[静音]' && c.name !== '音效');
+        }
+        return characters.filter(c =>
+            (c.projectId === selectedProjectId || !c.projectId) &&
+            c.status !== 'merged' && c.name !== '[静音]' && c.name !== '音效'
+        );
+    }, [characters, selectedProjectId]);
+
     const selectedCharacter = useMemo(() => characters.find(c => c.id === selectedCharacterId), [characters, selectedCharacterId]);
 
     const updateRow = useCallback((id: string, updates: Partial<VoiceLibraryRowState>) => {
@@ -153,7 +164,7 @@ export const useVoiceLibrary = () => {
 
     // Effect to populate rows based on filters
     useEffect(() => {
-        if (!selectedCharacterId || !currentProject) {
+        if (!currentProject) {
             setRows([]);
             return;
         }
@@ -168,18 +179,35 @@ export const useVoiceLibrary = () => {
             }
             return chapter.title.includes(filter);
         };
-        const scriptLines = currentProject.chapters.flatMap(chapter =>
-            chapterMatchesFilter(chapter)
-                ? chapter.scriptLines.filter(line => line.characterId === selectedCharacterId)
-                : []
-        );
+        
+        const nonAudioCharacterIds = characters
+            .filter(c => c.name === '[静音]' || c.name === '音效')
+            .map(c => c.id);
+
+        const scriptLines = currentProject.chapters.flatMap(chapter => {
+             if (chapterMatchesFilter(chapter)) {
+                let linesInChapter = chapter.scriptLines;
+                
+                // Filter out non-audio lines first
+                linesInChapter = linesInChapter.filter(line => !nonAudioCharacterIds.includes(line.characterId || ''));
+
+                if (selectedCharacterId) {
+                    // Then filter by character if one is selected
+                    return linesInChapter.filter(line => line.characterId === selectedCharacterId);
+                }
+                // No character selected, return all (already filtered) lines from the chapter
+                return linesInChapter;
+            }
+            return [];
+        });
+
         setRows(scriptLines.map(line => ({
             id: `row_${line.id}_${Math.random()}`,
             promptFilePath: null, promptAudioUrl: null, promptFileName: null,
             text: line.text, status: 'idle', audioUrl: null, error: null,
             originalLineId: line.id,
         })));
-    }, [selectedCharacterId, chapterFilter, currentProject]);
+    }, [selectedCharacterId, chapterFilter, currentProject, characters]);
     
     const processAndAssignAudio = async (row: VoiceLibraryRowState, audioPath: string) => {
         if (!row.originalLineId || !selectedProjectId || !currentProject) return;

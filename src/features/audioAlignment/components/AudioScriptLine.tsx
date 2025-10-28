@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ScriptLine, Character, AudioBlob } from '../../../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ScriptLine, Character } from '../../../types';
 import { useStore } from '../../../store/useStore';
 import { db } from '../../../db';
 import { isHexColor, getContrastingTextColor } from '../../../lib/colorUtils';
@@ -15,7 +15,6 @@ interface AudioScriptLineProps {
 }
 
 const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, projectId, chapterId, onRequestShiftDown, onRequestShiftUp }) => {
-    // FIX: Replaced direct access to `state.cvStyles` (which does not exist on the global state) with a derived value from the current project's `cvStyles`. Fetched `projects` from the store and used `React.useMemo` to find the current project based on the `projectId` prop and extract its `cvStyles` map.
     const { assignAudioToLine, updateLineAudio, projects, playingLineInfo, setPlayingLine, clearPlayingLine } = useStore(state => ({
         assignAudioToLine: state.assignAudioToLine,
         updateLineAudio: state.updateLineAudio,
@@ -25,7 +24,7 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
         clearPlayingLine: state.clearPlayingLine,
     }));
     const [hasAudio, setHasAudio] = useState<boolean>(!!line.audioBlobId);
-    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [isDraggingOver, setIsDraggingOver] = useState(false);
 
     const cvStyles = React.useMemo(() => {
         const currentProject = projects.find(p => p.id === projectId);
@@ -35,11 +34,6 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
     useEffect(() => {
         setHasAudio(!!line.audioBlobId);
     }, [line.audioBlobId]);
-
-
-    const handleAudioData = async (blob: Blob) => {
-        await assignAudioToLine(projectId, chapterId, line.id, blob);
-    };
 
     const handleDeleteAudio = async () => {
         if (line.audioBlobId) {
@@ -51,14 +45,6 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
             await db.audioBlobs.delete(blobIdToDelete);
         }
     };
-
-    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            handleAudioData(file);
-        }
-        if(fileInputRef.current) fileInputRef.current.value = "";
-    };
     
     const isPlaying = playingLineInfo?.line.id === line.id;
 
@@ -69,6 +55,40 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
             setPlayingLine(line, character);
         }
     };
+
+    // --- Drag and Drop Handlers ---
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer.types.includes('Files')) {
+            setIsDraggingOver(true);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOver(false);
+    };
+
+    const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOver(false);
+
+        const file = e.dataTransfer.files?.[0];
+        if (file && file.type.startsWith('audio/')) {
+            await assignAudioToLine(projectId, chapterId, line.id, file);
+        } else {
+            alert('请拖拽有效的音频文件 (如 .wav, .mp3)。');
+        }
+    }, [assignAudioToLine, projectId, chapterId, line.id]);
+    // --- End Drag and Drop Handlers ---
 
 
     const isNarration = !character || character.name.toLowerCase() === 'narrator';
@@ -139,12 +159,19 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
     const cvChipStyle = getCvChipStyle();
     
     const playingClass = isPlaying ? 'outline outline-4 outline-amber-400 shadow-[0_0_25px_15px_rgba(250,204,21,0.5)]' : 'border-slate-700';
+    const dragDropClasses = isDraggingOver ? 'border-sky-500 border-dashed bg-slate-600/50' : playingClass;
 
     return (
-        <div className="flex items-center gap-x-4">
-            <div className={`p-3 rounded-lg border flex-grow flex items-center gap-x-3 transition-all duration-200 ${playingClass} ${rowBgClass}`} style={rowBgStyle}>
+        <div 
+            className="flex items-center gap-x-4 relative"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
+            <div className={`p-3 rounded-lg border flex-grow flex items-center gap-x-3 transition-all duration-200 ${dragDropClasses} ${rowBgClass}`} style={rowBgStyle}>
                 <div className="w-24 flex-shrink-0 flex items-center justify-start">
-                    {!isNarration && (
+                    {!isNarration && character && (
                         character.cvName ? (
                             <span 
                                 className={`truncate ${cvChipStyle.className}`}
@@ -170,7 +197,7 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
                 <div className={`flex-grow ${rowTextStyle.className}`} style={rowTextStyle.style}>
                     {line.text}
                 </div>
-                <div className="flex-shrink-0 flex items-center space-x-2">
+                <div className="flex-shrink-0 flex items-center space-x-2 z-10">
                     <button
                         onClick={handlePlayPauseClick}
                         disabled={!hasAudio}
@@ -178,15 +205,6 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
                         title={isPlaying ? "暂停" : "播放"}
                     >
                         {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
-                    </button>
-                    
-                    <input type="file" accept="audio/*" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="p-2 rounded-full bg-slate-600 hover:bg-green-500 text-slate-200 hover:text-white transition-colors"
-                        title="上传音频文件"
-                    >
-                        <UploadIcon className="w-4 h-4" />
                     </button>
                     
                     <button
@@ -228,6 +246,12 @@ const AudioScriptLine: React.FC<AudioScriptLineProps> = ({ line, character, proj
                   </span>
               )}
             </div>
+            {isDraggingOver && (
+                <div className="absolute inset-0 bg-sky-500/20 rounded-lg flex items-center justify-center pointer-events-none border-2 border-dashed border-sky-300">
+                    <UploadIcon className="w-8 h-8 text-sky-200" />
+                    <span className="ml-3 text-lg font-semibold text-sky-100">拖拽音频到此处以上传</span>
+                </div>
+            )}
         </div>
     );
 };
