@@ -1,8 +1,11 @@
-import React from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { Project } from '../../../../types';
-import { SparklesIcon, BookOpenIcon, UploadIcon, BoltIcon, UserCircleIcon, ArrowDownTrayIcon } from '../../../../components/ui/icons'; 
+import { SparklesIcon, BookOpenIcon, UploadIcon, BoltIcon, UserCircleIcon, ArrowDownTrayIcon, ChevronDownIcon } from '../../../../components/ui/icons'; 
 import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
 import { useEditorContext } from '../../contexts/EditorContext';
+import { useStore } from '../../../../store/useStore';
+import { AiProvider } from '../../../../store/slices/uiSlice';
 
 // Define an interface for the expected return type of useChapterActions
 interface ChapterActionsHookReturn {
@@ -21,6 +24,13 @@ interface ChapterListActionsProps {
   onOpenExportModal: () => void;
 }
 
+const providers: { key: AiProvider; name: string }[] = [
+    { key: 'gemini', name: 'Gemini' },
+    { key: 'openai', name: 'GPT' },
+    { key: 'moonshot', name: 'Moonshot' },
+    { key: 'deepseek', name: 'DeepSeek' },
+];
+
 const ChapterListActions: React.FC<ChapterListActionsProps> = ({
   project,
   onParseProject,
@@ -38,6 +48,25 @@ const ChapterListActions: React.FC<ChapterListActionsProps> = ({
 
   const { openScriptImport, allCvNames, cvFilter, setCvFilter } = useEditorContext();
 
+  const { 
+    selectedAiProvider,
+    setSelectedAiProvider,
+  } = useStore();
+  const [isAiDropdownOpen, setIsAiDropdownOpen] = useState(false);
+  const aiButtonRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+          if (aiButtonRef.current && !aiButtonRef.current.contains(event.target as Node)) {
+              setIsAiDropdownOpen(false);
+          }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+          document.removeEventListener('mousedown', handleClickOutside);
+      };
+  }, []);
+
   return (
     <>
       {project.chapters.length === 0 && project.rawFullScript && (
@@ -53,15 +82,46 @@ const ChapterListActions: React.FC<ChapterListActionsProps> = ({
 
       <div className="space-y-2 mb-3">
         <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={handleAiAnnotationClick}
-              disabled={isProcessingDisabled('ai')}
-              className="flex items-center justify-center px-2 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-50"
-              title={isProcessingDisabled('ai') ? "选择包含内容的章节或确保当前页面有内容以进行 AI 标注" : "使用 AI 标注选定内容"}
-            >
-              {isAnyOperationLoading && isProcessingDisabled('ai') ? <LoadingSpinner /> : <SparklesIcon className="w-4 h-4 mr-1" />}
-              {getAnnotationButtonText("AI", true)}
-            </button>
+            <div ref={aiButtonRef} className="relative inline-flex rounded-md shadow-sm col-span-1">
+              <button
+                type="button"
+                onClick={handleAiAnnotationClick}
+                disabled={isProcessingDisabled('ai')}
+                className="flex-grow w-full flex items-center justify-center px-2 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-l-md text-xs font-medium transition-colors disabled:opacity-50"
+                title={isProcessingDisabled('ai') ? "选择包含内容的章节或确保当前页面有内容以进行 AI 标注" : "使用 AI 标注选定内容"}
+              >
+                {isAnyOperationLoading && isProcessingDisabled('ai') ? <LoadingSpinner /> : <SparklesIcon className="w-4 h-4 mr-1" />}
+                {getAnnotationButtonText(`${providers.find(p => p.key === selectedAiProvider)?.name || '...'}`, true)}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAiDropdownOpen(prev => !prev)}
+                disabled={isAnyOperationLoading}
+                className="px-1.5 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-r-md disabled:opacity-50"
+              >
+                <ChevronDownIcon className="w-4 h-4" />
+              </button>
+              {isAiDropdownOpen && (
+                <div className="origin-top-left absolute left-0 mt-10 w-48 rounded-md shadow-lg bg-slate-700 ring-1 ring-black ring-opacity-5 z-20">
+                  <div className="py-1" role="menu">
+                    {providers.map(provider => (
+                      <a
+                        key={provider.key}
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setSelectedAiProvider(provider.key);
+                          setIsAiDropdownOpen(false);
+                        }}
+                        className={`block px-4 py-2 text-sm ${selectedAiProvider === provider.key ? 'bg-purple-600 text-white' : 'text-slate-200 hover:bg-slate-600'}`}
+                      >
+                        {provider.name}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
              <button
               onClick={openScriptImport}
               className="flex items-center justify-center px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs font-medium transition-colors"

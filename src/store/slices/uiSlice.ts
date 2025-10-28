@@ -1,7 +1,19 @@
+
 import { StateCreator } from 'zustand';
 import { AppState } from '../useStore'; // Import AppState for cross-slice type reference
 import { AppView, ScriptLine, Character } from '../../types';
 import React from 'react';
+import { db } from '../../db';
+
+export type AiProvider = 'gemini' | 'openai' | 'moonshot' | 'deepseek';
+
+export interface ApiSettings {
+  gemini: { apiKey: string; baseUrl?: string };
+  openai: { apiKey: string; baseUrl: string; model: string };
+  moonshot: { apiKey: string; baseUrl: string; model: string };
+  deepseek: { apiKey: string; baseUrl: string; model: string };
+}
+
 
 export interface ConfirmModalState {
   isOpen: boolean;
@@ -32,6 +44,10 @@ export interface UiSlice {
     isOpen: boolean;
     characterToEdit: Character | null;
   };
+  isSettingsModalOpen: boolean;
+  apiSettings: ApiSettings;
+  selectedAiProvider: AiProvider;
+
 
   navigateTo: (view: AppView) => void;
   setIsLoading: (loading: boolean) => void;
@@ -52,6 +68,10 @@ export interface UiSlice {
   closeConfirmModal: () => void;
   openCharacterAndCvStyleModal: (character: Character | null) => void;
   closeCharacterAndCvStyleModal: () => void;
+  openSettingsModal: () => void;
+  closeSettingsModal: () => void;
+  setApiSettings: (settings: ApiSettings) => Promise<void>;
+  setSelectedAiProvider: (provider: AiProvider) => Promise<void>;
 }
 
 export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
@@ -63,6 +83,14 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => (
   playingLineInfo: null,
   confirmModal: confirmModalInitState,
   characterAndCvStyleModal: { isOpen: false, characterToEdit: null },
+  isSettingsModalOpen: false,
+  apiSettings: {
+    gemini: { apiKey: '' },
+    openai: { apiKey: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4-turbo' },
+    moonshot: { apiKey: '', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
+    deepseek: { apiKey: '', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+  },
+  selectedAiProvider: 'gemini',
 
   navigateTo: (view) => set({ currentView: view }),
   setIsLoading: (loading) => set({ isLoading: loading }),
@@ -99,4 +127,14 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => (
   closeConfirmModal: () => set({ confirmModal: confirmModalInitState }),
   openCharacterAndCvStyleModal: (character) => set({ characterAndCvStyleModal: { isOpen: true, characterToEdit: character } }),
   closeCharacterAndCvStyleModal: () => set({ characterAndCvStyleModal: { isOpen: false, characterToEdit: null } }),
+  openSettingsModal: () => set({ isSettingsModalOpen: true }),
+  closeSettingsModal: () => set({ isSettingsModalOpen: false }),
+  setApiSettings: async (settings) => {
+    await db.misc.put({ key: 'apiSettings', value: settings });
+    set({ apiSettings: settings });
+  },
+  setSelectedAiProvider: async (provider) => {
+    await db.misc.put({ key: 'selectedAiProvider', value: provider });
+    set({ selectedAiProvider: provider });
+  },
 });

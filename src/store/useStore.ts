@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 // Fix: Import from types.ts to break circular dependency
 import { AppView, CVStylesMap, PresetColor } from '../types';
@@ -41,7 +42,9 @@ export const useStore = create<AppState>((set, get, api) => ({
         cvStylesItem,
         mergeHistoryItem,
         cvColorPresetsItem,
-        characterColorPresetsItem
+        characterColorPresetsItem,
+        apiSettingsItem,
+        selectedAiProviderItem,
       ] = await db.transaction('r', db.projects, db.characters, db.misc, async () => {
         return Promise.all([
           db.projects.orderBy('lastModified').reverse().toArray(),
@@ -51,12 +54,16 @@ export const useStore = create<AppState>((set, get, api) => ({
           db.misc.get('mergeHistory'),
           db.misc.get('cvColorPresets'),
           db.misc.get('characterColorPresets'),
+          db.misc.get('apiSettings'),
+          db.misc.get('selectedAiProvider'),
         ]);
       });
 
       const allCvNames = allCvNamesItem?.value || [];
       const cvStyles = cvStylesItem?.value || {};
       const mergeHistory = mergeHistoryItem?.value || [];
+      const apiSettings = apiSettingsItem?.value || get().apiSettings;
+      const selectedAiProvider = selectedAiProviderItem?.value || 'gemini';
       
       let cvColorPresets = cvColorPresetsItem?.value;
       if (!cvColorPresets || !Array.isArray(cvColorPresets) || cvColorPresets.length === 0) {
@@ -120,6 +127,8 @@ export const useStore = create<AppState>((set, get, api) => ({
         mergeHistory,
         cvColorPresets,
         characterColorPresets,
+        apiSettings,
+        selectedAiProvider,
         currentView: initialView,
         aiProcessingChapterIds: [], // Reset on load
         selectedProjectId: get().selectedProjectId || null,

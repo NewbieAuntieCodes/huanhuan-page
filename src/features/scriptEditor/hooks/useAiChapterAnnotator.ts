@@ -19,11 +19,27 @@ export const useAiChapterAnnotator = ({
   setMultiSelectedChapterIdsAfterProcessing,
 }: UseAiChapterAnnotatorProps) => {
   const [isLoadingAiAnnotation, setIsLoadingAiAnnotation] = useState(false);
-  const addAiProcessingChapterId = useStore(state => state.addAiProcessingChapterId);
-  const removeAiProcessingChapterId = useStore(state => state.removeAiProcessingChapterId);
+  const { 
+    addAiProcessingChapterId,
+    removeAiProcessingChapterId,
+    apiSettings,
+    selectedAiProvider
+  } = useStore(state => ({
+    addAiProcessingChapterId: state.addAiProcessingChapterId,
+    removeAiProcessingChapterId: state.removeAiProcessingChapterId,
+    apiSettings: state.apiSettings,
+    selectedAiProvider: state.selectedAiProvider
+  }));
+
 
   const handleRunAiAnnotationForChapters = useCallback(async (chapterIds: string[]) => {
     if (!currentProject || chapterIds.length === 0) return;
+
+    const providerSettings = apiSettings[selectedAiProvider];
+    if (!providerSettings || !providerSettings.apiKey) {
+      alert(`请在“设置”中为 ${selectedAiProvider.toUpperCase()} 配置 API Key。`);
+      return;
+    }
 
     setIsLoadingAiAnnotation(true);
     chapterIds.forEach(addAiProcessingChapterId);
@@ -32,7 +48,7 @@ export const useAiChapterAnnotator = ({
       const chaptersToProcess = currentProject.chapters.filter(ch => chapterIds.includes(ch.id));
       const combinedText = chaptersToProcess.map(ch => ch.rawContent).join('\n\n--- CHAPTER BREAK ---\n\n');
       
-      const annotatedLines = await getAiAnnotatedScript(combinedText);
+      const annotatedLines = await getAiAnnotatedScript(combinedText, selectedAiProvider, apiSettings);
 
       const { newScriptLines } = processAiScriptAnnotations(annotatedLines, onAddCharacter);
 
@@ -83,7 +99,7 @@ export const useAiChapterAnnotator = ({
       setIsLoadingAiAnnotation(false);
       chapterIds.forEach(removeAiProcessingChapterId);
     }
-  }, [currentProject, onAddCharacter, applyUndoableProjectUpdate, addAiProcessingChapterId, removeAiProcessingChapterId, setMultiSelectedChapterIdsAfterProcessing]);
+  }, [currentProject, onAddCharacter, applyUndoableProjectUpdate, addAiProcessingChapterId, removeAiProcessingChapterId, setMultiSelectedChapterIdsAfterProcessing, apiSettings, selectedAiProvider]);
 
   return {
     isLoadingAiAnnotation,

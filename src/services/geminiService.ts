@@ -1,17 +1,60 @@
 
-
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AiAnnotatedLine } from '../types';
+import { ApiSettings, AiProvider } from '../store/slices/uiSlice';
 
-// @google/genai-api-guideline-fix: Initialize GoogleGenAI with API key from environment variables as required by the guidelines.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-// FIX: Updated model to a more stable, general-purpose version as per guidelines.
-const model = 'gemini-2.5-flash';
-
-export const getAiAnnotatedScript = async (scriptText: string): Promise<AiAnnotatedLine[]> => {
-  // @google/genai-api-guideline-fix: Removed API key check and simulation logic. The application must assume the API_KEY is correctly configured in the environment.
+const getOpenAICompatibleResponse = async (provider: AiProvider, settings: ApiSettings, prompt: string): Promise<any> => {
+    // FIX: Add a type guard to ensure this function is not called for the 'gemini' provider.
+    // This narrows the type of 'config' to one that is guaranteed to have a 'model' property, resolving the TypeScript error.
+    if (provider === 'gemini') {
+        throw new Error('getOpenAICompatibleResponse should not be called for the Gemini provider.');
+    }
+    const config = settings[provider];
+    if (!config || !config.apiKey || !config.baseUrl || !config.model) {
+      throw new Error(`Configuration for ${provider} is incomplete. Check settings.`);
+    }
   
+    const body: any = {
+      model: config.model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.2,
+    };
+  
+    // Add response_format only for providers that support it well (like OpenAI)
+    if (provider === 'openai') {
+      body.response_format = { type: "json_object" };
+    }
+  
+    const response = await fetch(config.baseUrl.endsWith('/chat/completions') ? config.baseUrl : `${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+  
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`API request failed for ${provider}: ${response.statusText} - ${errorBody}`);
+    }
+  
+    const data = await response.json();
+    const jsonStr = data.choices[0].message.content;
+    
+    // Clean up potential markdown code fences from the response string
+    const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
+    const match = jsonStr.match(fenceRegex);
+    const cleanedJsonStr = match ? match[2].trim() : jsonStr.trim();
+    
+    return JSON.parse(cleanedJsonStr);
+};
+
+export const getAiAnnotatedScript = async (
+  scriptText: string,
+  provider: AiProvider,
+  settings: ApiSettings
+): Promise<AiAnnotatedLine[]> => {
   const prompt = `You are an assistant for a scriptwriting application. Your task is to analyze the provided script text (which may consist of concatenated content from multiple chapters of a novel) and break it down into distinct lines, assigning each to a speaker.
 
 A critical requirement is to handle lines or paragraphs containing both narration (e.g., character actions, scene descriptions) and direct dialogue (speech enclosed in quotation marks like “...” or 「...」).
@@ -59,35 +102,42 @@ ${scriptText}
 `;
 
   try {
-    // FIX: Simplified the `contents` parameter for a single text prompt, as per @google/genai guidelines.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        temperature: 0.2, // Lower temperature for more deterministic and structured output
-      },
-    });
+    let parsedData: any;
+    switch (provider) {
+      case 'gemini':
+        const apiKey = settings.gemini.apiKey || process.env.API_KEY;
+        if (!apiKey) throw new Error("Gemini API Key is not configured.");
+        const ai = new GoogleGenAI({ apiKey });
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                temperature: 0.2,
+            },
+        });
+        const jsonStr = response.text.trim();
+        const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
+        const match = jsonStr.match(fenceRegex);
+        parsedData = JSON.parse(match ? match[2].trim() : jsonStr);
+        break;
+      
+      case 'openai':
+      case 'moonshot':
+      case 'deepseek':
+        parsedData = await getOpenAICompatibleResponse(provider, settings, prompt);
+        break;
 
-    // @google/genai-api-guideline-fix: Use `response.text` directly to get the generated text content.
-    let jsonStr = response.text.trim();
-    const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
-    const match = jsonStr.match(fenceRegex);
-    if (match && match[2]) {
-      jsonStr = match[2].trim();
+      default:
+        throw new Error(`Unsupported AI provider: ${provider}`);
     }
-    
-    const parsedData = JSON.parse(jsonStr);
-    
-    let rawItemsArray: any[] | null = null;
 
+    let rawItemsArray: any[] | null = null;
     if (Array.isArray(parsedData)) {
         rawItemsArray = parsedData;
     } else if (typeof parsedData === 'object' && parsedData !== null) {
-        // Attempt to recover if the response is an object with a key that is an array
         const keys = Object.keys(parsedData);
-        if (keys.length === 1 && Array.isArray(parsedData[keys[0]])) {
-            console.warn("Recovered array from nested object in Gemini response.");
+        if (keys.length > 0 && Array.isArray(parsedData[keys[0]])) {
             rawItemsArray = parsedData[keys[0]];
         }
     }
@@ -95,42 +145,25 @@ ${scriptText}
     if (rawItemsArray) {
         const correctedData = rawItemsArray.map((item: any): AiAnnotatedLine => {
             const lineText = item.line_text;
-            // Handle the typo: check for suggested_character_name or suggester_character_name
             const characterName = item.suggested_character_name || item.suggester_character_name;
-            
             return {
-                line_text: typeof lineText === 'string' ? lineText : "", // Ensure line_text is a string
-                suggested_character_name: typeof characterName === 'string' ? characterName : "Narrator" // Ensure char name is string, default to Narrator
+                line_text: typeof lineText === 'string' ? lineText : "",
+                suggested_character_name: typeof characterName === 'string' ? characterName : "Narrator"
             };
         });
 
-        // Validate the corrected data structure
         if (correctedData.every(item => typeof item.line_text === 'string' && typeof item.suggested_character_name === 'string')) {
             return correctedData;
         } else {
-            const invalidItems = correctedData.filter(item => !(typeof item.line_text === 'string' && typeof item.suggested_character_name === 'string'));
-            console.error("Gemini response, after attempting typo correction, still contains malformed items:", invalidItems);
-            throw new Error("Invalid response format from AI after corrections. Malformed items found: " + JSON.stringify(invalidItems));
+            throw new Error("Invalid response format from AI after corrections.");
         }
     } else {
-        console.error("Gemini response is not an array and not a recognized recoverable structure:", parsedData);
-        throw new Error("Invalid response format from AI. Expected array of {line_text, suggested_character_name}. Got: " + JSON.stringify(parsedData));
+        throw new Error("Invalid response format from AI. Expected a JSON array.");
     }
 
   } catch (error) {
-    console.error("Error calling Gemini API or parsing response:", error);
-    // @google/genai-api-guideline-fix: Removed fallback simulation. The application should handle API errors gracefully.
-    alert(`Error with AI Annotation: ${error instanceof Error ? error.message : String(error)}. Please check your API key and network connection.`);
-    throw error; // Re-throw the error to be handled by the caller.
+    console.error(`Error with ${provider} API or parsing response:`, error);
+    alert(`Error with AI Annotation: ${error instanceof Error ? error.message : String(error)}.`);
+    throw error;
   }
-};
-
-// Simulated AI Voice Generation (Gemini is text-to-text, this is a placeholder)
-export const simulateGenerateVoice = async (text: string): Promise<{ audioSrc: string }> => {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      // In a real app, this would call a TTS API and return an actual audio URL/blob
-      resolve({ audioSrc: `simulated_audio_for_${text.substring(0, 15).replace(/\s/g, '_')}.mp3` });
-    }, 1500 + Math.random() * 1000); // Simulate network delay
-  });
 };

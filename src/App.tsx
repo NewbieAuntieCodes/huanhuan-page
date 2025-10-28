@@ -1,11 +1,12 @@
 
-
 import React, { useEffect, useCallback } from 'react';
 import { useStore }  from './store/useStore';
 import { Character } from './types';
 import ConfirmModal from './components/modal/ConfirmModal';
 import CharacterAndCvStyleModal from './features/scriptEditor/components/editor_page_modal/CharacterAndCvStyleModal';
 import AppRouter from './routing/AppRouter'; 
+import { CogIcon } from './components/ui/icons';
+import SettingsModal from './components/modal/SettingsModal';
 
 const App: React.FC = () => {
   const { 
@@ -18,12 +19,15 @@ const App: React.FC = () => {
     cvStyles,
     confirmModal,
     characterAndCvStyleModal,
+    isSettingsModalOpen,
     loadInitialData,
     navigateTo,
     addCharacter,
     editCharacter,
     closeConfirmModal,
     closeCharacterAndCvStyleModal,
+    openSettingsModal,
+    closeSettingsModal,
   } = useStore();
   
   useEffect(() => {
@@ -53,7 +57,7 @@ const App: React.FC = () => {
     <div className="h-screen w-screen flex flex-col bg-slate-900">
       <header className="bg-slate-800 text-white p-3 shadow-md flex-shrink-0 border-b border-slate-700 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-sky-400">AI 有声内容创作</h1>
-        <nav className="space-x-3">
+        <nav className="space-x-3 flex items-center">
           {currentView !== "upload" && (
             <button onClick={() => navigateTo("upload")} className="text-sm text-sky-300 hover:text-sky-100">上传新文件</button>
           )}
@@ -72,6 +76,9 @@ const App: React.FC = () => {
           {currentView !== "voiceLibrary" && projects.length > 0 && (
              <button onClick={() => navigateTo("voiceLibrary")} className="text-sm text-sky-300 hover:text-sky-100">音色库</button>
           )}
+          <button onClick={openSettingsModal} className="text-sm text-sky-300 hover:text-sky-100 p-2 rounded-full hover:bg-slate-700" title="设置">
+            <CogIcon className="w-5 h-5" />
+          </button>
         </nav>
       </header>      
       <main className="flex-grow overflow-hidden">
@@ -110,6 +117,10 @@ const App: React.FC = () => {
           cvStyles={cvStyles}
         />
       )}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={closeSettingsModal}
+      />
     </div>
   );
 };
