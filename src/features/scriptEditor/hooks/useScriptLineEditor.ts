@@ -44,7 +44,7 @@ export const useScriptLineEditor = (
     const narratorCharacter = characters.find(c => c.name === 'Narrator');
     const newCharacter = characters.find(c => c.id === newCharacterId);
 
-    if (!currentProject || !newCharacter) return;
+    if (!currentProject) return;
 
     applyUndoableProjectUpdate(prevProject => {
         const project = { ...prevProject };
@@ -58,53 +58,84 @@ export const useScriptLineEditor = (
         const currentLine = chapter.scriptLines[lineIndex];
         const originalCharacter = characters.find(c => c.id === currentLine.characterId);
         
-        // Case 1: Changing TO Narrator
-        if (newCharacter.id === narratorCharacter?.id) {
-            let convertedText = currentLine.text;
+        const isChangingToNarrator = newCharacterId === '' || newCharacterId === narratorCharacter?.id;
+
+        if (isChangingToNarrator) {
             const isOriginallyCharacter = originalCharacter && originalCharacter.name !== 'Narrator';
-            if (isOriginallyCharacter) {
-                 const trimmedText = convertedText.trim();
-                 // If it was quoted dialogue, just extract the content as narration.
-                 if ((trimmedText.startsWith('“') && trimmedText.endsWith('”')) || (trimmedText.startsWith('「') && trimmedText.endsWith('」'))) {
-                    const content = trimmedText.substring(1, trimmedText.length - 1);
-                    const before = convertedText.substring(0, convertedText.indexOf(trimmedText));
-                    const after = convertedText.substring(convertedText.indexOf(trimmedText) + trimmedText.length);
-                    // Remove quotes, don't replace with single quotes. This allows for clean merging.
-                    convertedText = before + content + after; 
+            // Only apply special logic if changing from a character TO a narrator
+            if (!isOriginallyCharacter) {
+                const newScriptLines = [...chapter.scriptLines];
+                newScriptLines[lineIndex] = { ...currentLine, characterId: newCharacterId };
+                chapter.scriptLines = newScriptLines;
+                project.chapters[chapterIndex] = chapter;
+                return project;
+            }
+
+            // 1. Transform text: double quotes to single quotes
+            let textToMerge = currentLine.text;
+            const trimmedText = textToMerge.trim();
+            if ((trimmedText.startsWith('“') && trimmedText.endsWith('”')) || (trimmedText.startsWith('「') && trimmedText.endsWith('」'))) {
+                const content = trimmedText.substring(1, trimmedText.length - 1);
+                const before = textToMerge.substring(0, textToMerge.indexOf(trimmedText));
+                const after = textToMerge.substring(textToMerge.indexOf(trimmedText) + trimmedText.length);
+                textToMerge = `${before}‘${content}’${after}`;
+            }
+
+            // 2. Find the entire contiguous block of Narrator lines
+            let firstIndex = lineIndex;
+            while (firstIndex > 0) {
+                const prevLine = chapter.scriptLines[firstIndex - 1];
+                const prevChar = characters.find(c => c.id === prevLine.characterId);
+                if (!prevChar || prevChar.name === 'Narrator') {
+                    firstIndex--;
+                } else {
+                    break;
                 }
             }
 
-            const previousLine = lineIndex > 0 ? chapter.scriptLines[lineIndex - 1] : null;
-            const nextLine = lineIndex < chapter.scriptLines.length - 1 ? chapter.scriptLines[lineIndex + 1] : null;
+            let lastIndex = lineIndex;
+            while (lastIndex < chapter.scriptLines.length - 1) {
+                const nextLine = chapter.scriptLines[lastIndex + 1];
+                const nextChar = characters.find(c => c.id === nextLine.characterId);
+                if (!nextChar || nextChar.name === 'Narrator') {
+                    lastIndex++;
+                } else {
+                    break;
+                }
+            }
+            
+            // 3. Merge if there's a block of more than one line
+            if (firstIndex !== lastIndex) {
+                const linesToProcess = chapter.scriptLines.slice(firstIndex, lastIndex + 1);
+                const combinedText = linesToProcess.map((line, index) => {
+                    if ((firstIndex + index) === lineIndex) return textToMerge;
+                    return line.text;
+                }).join('\n');
 
-            const isPrevNarrator = !previousLine?.characterId || previousLine?.characterId === narratorCharacter?.id;
-            const isNextNarrator = !nextLine?.characterId || nextLine?.characterId === narratorCharacter?.id;
+                const mergedLine: ScriptLine = {
+                    ...chapter.scriptLines[firstIndex],
+                    text: combinedText,
+                    characterId: newCharacterId,
+                };
 
-            let newScriptLines = [...chapter.scriptLines];
-
-            if (isPrevNarrator && isNextNarrator) {
-                const combinedText = `${previousLine!.text}\n${convertedText}\n${nextLine!.text}`;
-                newScriptLines[lineIndex - 1] = { ...previousLine!, text: combinedText };
-                newScriptLines = newScriptLines.filter(l => l.id !== currentLine.id && l.id !== nextLine!.id);
-            } else if (isPrevNarrator) {
-                const combinedText = `${previousLine!.text}\n${convertedText}`;
-                newScriptLines[lineIndex - 1] = { ...previousLine!, text: combinedText };
-                newScriptLines = newScriptLines.filter(l => l.id !== currentLine.id);
-            } else if (isNextNarrator) {
-                const combinedText = `${convertedText}\n${nextLine!.text}`;
-                newScriptLines[lineIndex] = { ...currentLine, text: combinedText, characterId: newCharacterId };
-                newScriptLines = newScriptLines.filter(l => l.id !== nextLine!.id);
+                const lineIdsToRemove = new Set(linesToProcess.map(l => l.id));
+                const filteredLines = chapter.scriptLines.filter(l => !lineIdsToRemove.has(l.id));
+                
+                filteredLines.splice(firstIndex, 0, mergedLine);
+                chapter.scriptLines = filteredLines;
+                project.chapters[chapterIndex] = chapter;
+                return project;
             } else {
-                newScriptLines[lineIndex] = { ...currentLine, text: convertedText, characterId: newCharacterId };
+                // No merge, just update the single line's text and character
+                const newScriptLines = [...chapter.scriptLines];
+                newScriptLines[lineIndex] = { ...currentLine, text: textToMerge, characterId: newCharacterId };
+                chapter.scriptLines = newScriptLines;
+                project.chapters[chapterIndex] = chapter;
+                return project;
             }
 
-            chapter.scriptLines = newScriptLines;
-            project.chapters[chapterIndex] = chapter;
-            return project;
-        } 
-        
-        // Case 2: Changing FROM Narrator/unassigned TO a character
-        else {
+        } else {
+            // Handle changing FROM Narrator TO a character
             let newText = currentLine.text;
             const isOriginallyNarrator = !originalCharacter || originalCharacter.id === narratorCharacter?.id;
             
@@ -114,16 +145,12 @@ export const useScriptLineEditor = (
 
                 if (!isAlreadyDialogue) {
                     let content = trimmedText;
-                    // If it's single-quoted from a previous conversion, unwrap it
+                    // Unwrap single quotes if they exist from a previous conversion
                     if (content.startsWith('‘') && content.endsWith('’')) {
                         content = content.substring(1, content.length - 1);
                     }
-                    
-                    // Preserve any original whitespace around the content
                     const before = newText.substring(0, newText.indexOf(trimmedText));
                     const after = newText.substring(newText.indexOf(trimmedText) + trimmedText.length);
-                    
-                    // Re-wrap with standard double quotes
                     newText = `${before}“${content}”${after}`;
                 }
             }

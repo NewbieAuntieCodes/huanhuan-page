@@ -1,4 +1,5 @@
 
+
 import { StateCreator } from 'zustand';
 import { AppState } from '../useStore'; // Import AppState for cross-slice type reference
 import { AppView, ScriptLine, Character } from '../../types';
@@ -52,7 +53,7 @@ export interface UiSlice {
   navigateTo: (view: AppView) => void;
   setIsLoading: (loading: boolean) => void;
   setSelectedProjectId: (id: string | null) => void;
-  setSelectedChapterId: (id: string | null) => void;
+  setSelectedChapterId: (id: string | null) => Promise<void>;
   addAiProcessingChapterId: (id: string) => void;
   removeAiProcessingChapterId: (id: string) => void;
   setPlayingLine: (line: ScriptLine, character: Character | undefined) => void;
@@ -74,7 +75,7 @@ export interface UiSlice {
   setSelectedAiProvider: (provider: AiProvider) => Promise<void>;
 }
 
-export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
+export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set, get) => ({
   currentView: "dashboard", // Initial default
   isLoading: false,
   selectedProjectId: null,
@@ -94,8 +95,38 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => (
 
   navigateTo: (view) => set({ currentView: view }),
   setIsLoading: (loading) => set({ isLoading: loading }),
-  setSelectedProjectId: (id) => set({ selectedProjectId: id, selectedChapterId: null }),
-  setSelectedChapterId: (id) => set({ selectedChapterId: id }),
+  setSelectedProjectId: (id) => {
+    if (id) {
+        const { projects } = get();
+        const project = projects.find(p => p.id === id);
+        // Restore last viewed chapter, or default to first chapter, or null if no chapters.
+        const chapterIdToSet = project?.lastViewedChapterId || project?.chapters[0]?.id || null;
+        set({ selectedProjectId: id, selectedChapterId: chapterIdToSet });
+    } else {
+        set({ selectedProjectId: null, selectedChapterId: null });
+    }
+  },
+  setSelectedChapterId: async (id) => {
+    const { selectedProjectId, projects } = get();
+    // Update UI state immediately for responsiveness
+    set({ selectedChapterId: id });
+
+    if (selectedProjectId && id) {
+        const projectToUpdate = projects.find(p => p.id === selectedProjectId);
+        // Only update if the chapter has changed and project exists
+        if (projectToUpdate && projectToUpdate.lastViewedChapterId !== id) {
+            const updatedProject = { ...projectToUpdate, lastViewedChapterId: id };
+            
+            // Persist change to the database in the background
+            await db.projects.put(updatedProject);
+            
+            // Update the project in the global state
+            set(state => ({
+                projects: state.projects.map(p => p.id === selectedProjectId ? updatedProject : p),
+            }));
+        }
+    }
+  },
   addAiProcessingChapterId: (id) =>
     set((state) => ({
       aiProcessingChapterIds: state.aiProcessingChapterIds.includes(id)

@@ -217,7 +217,7 @@ const VoiceLibraryPage: React.FC = () => {
               <VoiceLibraryRow
                 key={row.id}
                 row={{ ...row, audioUrl: generatedAudioUrls[row.id] || null }}
-                // FIX: Pass null instead of an empty object when a character is not found.
+                // FIX: Pass null instead of an empty object when a character is not found. This resolves a TypeScript error where an empty object doesn't match the `Character` type.
                 character={characterForRow || null}
                 isBatchGenerating={isGenerating}
                 onTextChange={(text) => handleTextChange(row.id, text)}

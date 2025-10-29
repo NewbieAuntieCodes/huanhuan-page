@@ -54,6 +54,7 @@ export interface Project {
   lastModified: number; // Timestamp for sorting
   cvStyles?: CVStylesMap;
   customSoundTypes?: string[];
+  lastViewedChapterId?: string;
 }
 
 // For Gemini service response parsing
@@ -112,4 +113,9 @@ export interface AudioAssistantState {
   directoryName: string | null;
   scannedFiles: ParsedFileInfo[];
   manualOverrides: Record<string, boolean>;
+}
+
+export interface DirectoryHandleEntry {
+  projectId: string;
+  handle: FileSystemDirectoryHandle;
 }

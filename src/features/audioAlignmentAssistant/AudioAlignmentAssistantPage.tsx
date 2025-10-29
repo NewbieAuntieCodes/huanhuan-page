@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import { Character, Chapter, ParsedFileInfo, AudioAssistantState } from '../../types';
-import { FolderOpenIcon, CheckCircleIcon, XMarkIcon, ChevronLeftIcon } from '../../components/ui/icons';
+import { FolderOpenIcon, CheckCircleIcon, XMarkIcon, ChevronLeftIcon, ArrowPathIcon } from '../../components/ui/icons';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { db } from '../../db';
 
@@ -45,6 +45,12 @@ const AudioAlignmentAssistantPage: React.FC = () => {
 
     const [selectedRangeIndex, setSelectedRangeIndex] = useState<number | null>(null);
     const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
+    
+    // --- File System Access API state and refs ---
+    const isApiSupported = 'showDirectoryPicker' in window;
+    const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
+    
+    // Ref for fallback input method
     const directoryInputRef = useRef<HTMLInputElement>(null);
 
 
@@ -61,11 +67,92 @@ const AudioAlignmentAssistantPage: React.FC = () => {
         return { allCvNames: cvs, projectCharacters: projChars };
     }, [currentProject, characters]);
     
+    const scanDirectory = useCallback(async (handle: FileSystemDirectoryHandle, resetState: boolean) => {
+        setIsLoading(true);
+        if (resetState) {
+            setScannedFiles([]);
+            setManualOverrides({});
+        }
+
+        try {
+            const parsedFiles: ParsedFileInfo[] = [];
+            for await (const entry of handle.values()) {
+                // FIX: `kind` and `getFile` are not on the base `FileSystemHandle` type. Cast to `any` to access them after checking the kind.
+                if ((entry as any).kind === 'file') {
+                    const file = await (entry as any).getFile();
+                    if (file.name.endsWith('.mp3') || file.name.endsWith('.wav')) {
+                        const name = file.name.replace(/\.(mp3|wav)$/i, '');
+                        const parts = name.split(/[_]/);
+                        if (parts.length < 1) continue;
+        
+                        const chapterPart = parts[0];
+                        const chapterNumbers: number[] = [];
+                        if (chapterPart.includes('-')) {
+                            const [start, end] = chapterPart.split('-').map(Number);
+                            if (!isNaN(start) && !isNaN(end)) {
+                                for (let i = start; i <= end; i++) chapterNumbers.push(i);
+                            }
+                        } else if (!isNaN(Number(chapterPart))) {
+                            chapterNumbers.push(Number(chapterPart));
+                        }
+        
+                        if (chapterNumbers.length === 0) continue;
+        
+                        let cvName: string | null = null;
+                        let characterName: string | null = null;
+        
+                        if (parts.length > 1) {
+                            const potentialIdentifier = parts.slice(1).join('_');
+                            if (allCvNames.includes(potentialIdentifier)) {
+                                cvName = potentialIdentifier;
+                            } else {
+                                characterName = potentialIdentifier;
+                            }
+                        }
+        
+                        if (characterName === 'pb' || cvName === 'pb') {
+                           cvName = 'pb';
+                           characterName = 'Narrator';
+                        }
+        
+                        parsedFiles.push({ chapters: chapterNumbers, characterName, cvName });
+                    }
+                }
+            }
+            setDirectoryName(handle.name);
+            setScannedFiles(parsedFiles);
+        } catch (err) {
+            console.error("Error scanning directory:", err);
+            alert(`扫描文件夹时出错: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [allCvNames]);
+
     useEffect(() => {
         if (currentProject) {
             const loadState = async () => {
                 setIsLoading(true);
                 try {
+                    if (isApiSupported) {
+                        const handleEntry = await db.directoryHandles.get(currentProject.id);
+                        if (handleEntry) {
+                            const handle = handleEntry.handle;
+                            // FIX: `queryPermission` is not in the default type. Cast to 'any' to use.
+                            const permission = await (handle as any).queryPermission({ mode: 'read' });
+                            setDirectoryHandle(handle);
+                            if (permission === 'granted') {
+                                // Automatically scan if permission is already granted
+                                await scanDirectory(handle, true);
+                                return;
+                            } else {
+                                // We have a handle but no permission, just show the name
+                                setDirectoryName(handle.name);
+                            }
+                        }
+                    }
+
+                    // Fallback to old state if API not supported or no handle saved/permissioned
                     const savedState = await db.assistantState.get(currentProject.id);
                     if (savedState) {
                         setDirectoryName(savedState.directoryName);
@@ -80,8 +167,9 @@ const AudioAlignmentAssistantPage: React.FC = () => {
             };
             loadState();
         }
-    }, [currentProject]);
+    }, [currentProject, isApiSupported, scanDirectory]);
 
+    // Effect to save non-handle state
     useEffect(() => {
         if (currentProject && (directoryName || scannedFiles.length > 0)) {
             const saveState = async () => {
@@ -97,35 +185,68 @@ const AudioAlignmentAssistantPage: React.FC = () => {
         }
     }, [directoryName, scannedFiles, manualOverrides, currentProject]);
 
-    const handleScanDirectoryClick = () => {
+    const handleSelectDirectory = async () => {
+        if (!currentProject) return;
+        try {
+            // FIX: 'showDirectoryPicker' is not in the default 'window' type definition. Cast to 'any' to use this API.
+            const handle = await (window as any).showDirectoryPicker();
+            // FIX: 'requestPermission' is not in the default 'FileSystemDirectoryHandle' type. Cast to 'any' to use it.
+            if ((await (handle as any).requestPermission({ mode: 'read' })) !== 'granted') {
+                alert("需要文件夹读取权限才能继续。");
+                return;
+            }
+            await db.directoryHandles.put({ projectId: currentProject.id, handle });
+            setDirectoryHandle(handle);
+            await scanDirectory(handle, true);
+        } catch (err) {
+            if (!(err instanceof DOMException && err.name === 'AbortError')) {
+                console.error("Error picking directory:", err);
+            }
+        }
+    };
+    
+    const handleRescan = async () => {
+        if (directoryHandle) {
+            // FIX: 'requestPermission' is not in the default 'FileSystemDirectoryHandle' type. Cast to 'any' to use it.
+            if ((await (directoryHandle as any).requestPermission({ mode: 'read' })) === 'granted') {
+                await scanDirectory(directoryHandle, true);
+            } else {
+                alert("需要文件夹读取权限才能重新扫描。");
+            }
+        }
+    };
+
+    // --- Fallback method handlers ---
+    const handleScanDirectoryClick_Fallback = () => {
         directoryInputRef.current?.click();
     };
 
-    const handleDirectoryInputChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = event.target.files;
-        if (!files || files.length === 0) {
-            return;
+    // FIX: Set the non-standard 'webkitdirectory' attribute via a useEffect hook to avoid TypeScript prop errors.
+    useEffect(() => {
+        if (directoryInputRef.current) {
+            directoryInputRef.current.setAttribute('webkitdirectory', '');
         }
+    }, []);
+
+    const handleDirectoryInputChange_Fallback = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
 
         setIsLoading(true);
-        // Reset state for new scan
         setScannedFiles([]);
         setManualOverrides({});
         
         try {
             const firstFilePath = files[0].webkitRelativePath;
             const dirName = firstFilePath.split('/')[0];
-            
             const parsedFiles: ParsedFileInfo[] = [];
             
-            // FIX: Replaced for...of loop with a standard for loop to ensure correct type inference for 'file' from the FileList.
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 if (!file) continue;
-
                 if (file.name.endsWith('.mp3') || file.name.endsWith('.wav')) {
                     const name = file.name.replace(/\.(mp3|wav)$/i, '');
-                    const parts = name.split(/[_]/); // Use regex to handle multiple underscores
+                    const parts = name.split(/[_]/);
                     if (parts.length < 1) continue;
     
                     const chapterPart = parts[0];
@@ -161,24 +282,22 @@ const AudioAlignmentAssistantPage: React.FC = () => {
                     parsedFiles.push({ chapters: chapterNumbers, characterName, cvName });
                 }
             }
-            // Set state after processing all files
             setDirectoryName(dirName);
             setScannedFiles(parsedFiles);
 
         } catch (err) {
             console.error("Error processing directory files:", err);
             alert(`Error processing files: ${err instanceof Error ? err.message : String(err)}`);
-            // Reset state on error
             setDirectoryName(null);
             setScannedFiles([]);
             setManualOverrides({});
         } finally {
             setIsLoading(false);
-            if (event.target) {
-                event.target.value = '';
-            }
+            if (event.target) event.target.value = '';
         }
     }, [allCvNames]);
+    
+    // --- Memoized calculations for UI ---
     
     const chapterRanges = useMemo<{ label: string; start: number; end: number; }[]>(() => {
         if (!currentProject) return [];
@@ -205,6 +324,7 @@ const AudioAlignmentAssistantPage: React.FC = () => {
     const finalMatchStatus = useMemo(() => {
         if (scannedFiles.length === 0 || !currentProject) return null;
 
+        // FIX: Explicitly type `finalStatus` to `MatchStatus` to resolve indexing errors where keys were inferred as `unknown`.
         const finalStatus: MatchStatus = { characters: {}, chapters: {}, ranges: {} };
 
         const fileCoverage = new Map<number, ParsedFileInfo[]>();
@@ -221,8 +341,7 @@ const AudioAlignmentAssistantPage: React.FC = () => {
                 finalStatus.chapters[chapter.id] = true;
                 return;
             }
-            // FIX: Used a type guard `(id): id is string => !!id` instead of `filter(Boolean) as string[]` for safer type inference, ensuring `charId` is correctly typed as a string.
-            const charIdsInChapter = new Set(chapter.scriptLines.map(l => l.characterId).filter(Boolean) as string[]);
+            const charIdsInChapter = new Set(chapter.scriptLines.map(l => l.characterId).filter((id): id is string => !!id));
             if (charIdsInChapter.size === 0) {
                 finalStatus.chapters[chapter.id] = true;
                 return;
@@ -254,8 +373,7 @@ const AudioAlignmentAssistantPage: React.FC = () => {
 
             if (chapter && chapterNum !== null) {
                 const relevantFiles = fileCoverage.get(chapterNum) || [];
-                // FIX: Used a type guard `(id): id is string => !!id` instead of `filter(Boolean) as string[]` for safer type inference, ensuring `charId` is correctly typed as a string.
-                const charIdsInChapter = new Set(chapter.scriptLines.map(l => l.characterId).filter(Boolean) as string[]);
+                const charIdsInChapter = new Set(chapter.scriptLines.map(l => l.characterId).filter((id): id is string => !!id));
 
                 charIdsInChapter.forEach(charId => {
                     const character = projectCharacters.find(c => c.id === charId);
@@ -323,23 +441,37 @@ const AudioAlignmentAssistantPage: React.FC = () => {
             <header className="flex items-center justify-between p-4 border-b border-slate-800 flex-shrink-0">
                 <div className="flex flex-col">
                     <h1 className="text-2xl font-bold text-sky-400">对轨助手: <span className="text-slate-200">{currentProject.name}</span></h1>
-                    {directoryName && <p className="text-xs text-slate-400 mt-1">当前扫描文件夹: {directoryName}</p>}
+                    {directoryName && <p className="text-xs text-slate-400 mt-1">当前文件夹: {directoryName}</p>}
                 </div>
                 <div className="flex items-center space-x-3">
-                    <input
-                        type="file"
-                        ref={directoryInputRef}
-                        onChange={handleDirectoryInputChange}
-                        // @ts-ignore for non-standard attributes
-                        webkitdirectory=""
-                        directory=""
-                        multiple
-                        style={{ display: 'none' }}
-                    />
-                    <button onClick={handleScanDirectoryClick} disabled={isLoading} className="flex items-center text-sm text-sky-300 hover:text-sky-100 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50">
-                        {isLoading ? <LoadingSpinner/> : <FolderOpenIcon className="w-4 h-4 mr-2" />}
-                        {isLoading ? "扫描中..." : "扫描本地文件夹"}
-                    </button>
+                    {isApiSupported ? (
+                        <>
+                            <button onClick={handleSelectDirectory} disabled={isLoading} className="flex items-center text-sm text-sky-300 hover:text-sky-100 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50">
+                                {isLoading && !directoryHandle ? <LoadingSpinner/> : <FolderOpenIcon className="w-4 h-4 mr-2" />}
+                                {directoryHandle ? "更换文件夹" : "关联音频文件夹"}
+                            </button>
+                            {directoryHandle && (
+                                <button onClick={handleRescan} disabled={isLoading} className="flex items-center text-sm text-green-300 hover:text-green-100 px-3 py-1.5 bg-green-800/50 hover:bg-green-700/50 rounded-md disabled:opacity-50">
+                                    {isLoading ? <LoadingSpinner/> : <ArrowPathIcon className="w-4 h-4 mr-2" />}
+                                    重新扫描
+                                </button>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <input
+                                type="file"
+                                ref={directoryInputRef}
+                                onChange={handleDirectoryInputChange_Fallback}
+                                multiple
+                                style={{ display: 'none' }}
+                            />
+                            <button onClick={handleScanDirectoryClick_Fallback} disabled={isLoading} className="flex items-center text-sm text-sky-300 hover:text-sky-100 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50">
+                                {isLoading ? <LoadingSpinner/> : <FolderOpenIcon className="w-4 h-4 mr-2" />}
+                                {isLoading ? "扫描中..." : "扫描本地文件夹"}
+                            </button>
+                        </>
+                    )}
                     <button onClick={() => navigateTo('editor')} className="flex items-center text-sm text-sky-300 hover:text-sky-100 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md">
                         <ChevronLeftIcon className="w-4 h-4 mr-1" /> 返回
                     </button>
@@ -379,8 +511,8 @@ const AudioAlignmentAssistantPage: React.FC = () => {
 
                 <main className="flex-grow p-4 overflow-y-auto">
                      <h2 className="text-lg font-semibold text-slate-300 mb-3">角色状态</h2>
-                     {!scannedFiles.length ? (
-                        <div className="text-center py-10 text-slate-500">请先扫描本地音频文件夹。</div>
+                     {!directoryName && !scannedFiles.length ? (
+                        <div className="text-center py-10 text-slate-500">请先关联或扫描本地音频文件夹。</div>
                      ) : !selectedChapterId ? (
                         <div className="text-center py-10 text-slate-500">请选择一个章节查看角色状态。</div>
                      ) : charactersInSelectedChapter.length === 0 ? (

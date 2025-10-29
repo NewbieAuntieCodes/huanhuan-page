@@ -3,7 +3,7 @@
 // This was likely due to a module resolution or type inference issue with class extension.
 // Switched to the direct instantiation pattern with casting, which is a robust alternative.
 import Dexie, { type Table } from 'dexie';
-import { Project, Character, MergeHistoryEntry, AudioBlob, AudioAssistantState } from './types';
+import { Project, Character, MergeHistoryEntry, AudioBlob, AudioAssistantState, DirectoryHandleEntry } from './types';
 // Fix: Import from types.ts to break circular dependency with App.tsx -> useStore.ts -> db.ts cycle
 import { CVStylesMap } from './types';
 
@@ -20,6 +20,7 @@ interface IAudioCreatorDB {
   misc: Table<MiscData, string>;
   audioBlobs: Table<AudioBlob, string>;
   assistantState: Table<AudioAssistantState, string>;
+  directoryHandles: Table<DirectoryHandleEntry, string>;
 }
 
 // 2. Create and cast an instance of Dexie. This ensures the `db` object
@@ -54,6 +55,15 @@ db.version(4).stores({
   misc: 'key',
   audioBlobs: 'id, lineId',
   assistantState: 'projectId',
+});
+
+db.version(5).stores({
+  projects: 'id, lastModified',
+  characters: 'id, projectId',
+  misc: 'key',
+  audioBlobs: 'id, lineId',
+  assistantState: 'projectId',
+  directoryHandles: 'projectId',
 });
 
 
