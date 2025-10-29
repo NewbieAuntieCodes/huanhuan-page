@@ -83,25 +83,38 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
     };
   }, [isDropdownOpen, isSoundTypeDropdownOpen]);
 
-  const { chapterCharacters, otherCharacters } = useMemo(() => {
+  const { specialCharacters, chapterCharacters, otherCharacters } = useMemo(() => {
+    const specialNamesOrder = ['[静音]', '音效', 'narrator']; // lowercase
+    const specials: Character[] = [];
     const chapterChars: Character[] = [];
     const otherChars: Character[] = [];
     const lowerSearchTerm = searchTerm.toLowerCase();
 
     characters.forEach(c => {
-        if (c.name.toLowerCase().includes(lowerSearchTerm)) {
-            if (characterIdsInChapter.has(c.id)) {
-                chapterChars.push(c);
-            } else {
-                otherChars.push(c);
-            }
+        const lowerName = c.name.toLowerCase();
+        
+        // Skip if search term is present and it doesn't match
+        if (searchTerm && !lowerName.includes(lowerSearchTerm)) {
+            return;
+        }
+
+        if (specialNamesOrder.includes(lowerName)) {
+            specials.push(c);
+        } else if (characterIdsInChapter.has(c.id)) {
+            chapterChars.push(c);
+        } else {
+            otherChars.push(c);
         }
     });
 
-    chapterChars.sort((a, b) => a.name.localeCompare(b.name));
-    otherChars.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort special characters according to the predefined order
+    specials.sort((a, b) => specialNamesOrder.indexOf(a.name.toLowerCase()) - specialNamesOrder.indexOf(b.name.toLowerCase()));
 
-    return { chapterCharacters: chapterChars, otherCharacters: otherChars };
+    // Sort the alphabetical lists
+    chapterChars.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    otherChars.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    
+    return { specialCharacters: specials, chapterCharacters: chapterChars, otherCharacters: otherChars };
   }, [characters, searchTerm, characterIdsInChapter]);
 
 
@@ -318,7 +331,7 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
 
             {isDropdownOpen && (
               <div className="absolute z-20 mt-1 w-full bg-slate-800 rounded-md shadow-lg border border-slate-600 max-h-96 flex flex-col">
-                <div className="p-2 sticky top-0 bg-slate-800 border-b border-slate-700">
+                <div className="p-2 sticky top-0 bg-slate-800 border-b border-slate-700 z-10">
                   <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
                           <MagnifyingGlassIcon className="h-4 w-4 text-slate-400" />
@@ -337,38 +350,50 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
                   {character && !isSilentLine && (
                     <li
                       role="option"
-                      onClick={() => {
-                        onMergeLines(line.id);
-                        setIsDropdownOpen(false);
-                      }}
-                      className="px-3 py-2 text-sm text-indigo-200 bg-indigo-600 hover:bg-indigo-500 cursor-pointer font-semibold"
+                      onClick={() => { onMergeLines(line.id); setIsDropdownOpen(false); }}
+                      className="px-3 py-2 text-sm text-indigo-200 bg-indigo-600 hover:bg-indigo-500 cursor-pointer font-semibold sticky top-0 z-10"
                     >
                       [合并相邻同角色行]
                     </li>
                   )}
-                  <li
-                      role="option"
-                      onClick={() => {
-                          onAssignCharacter(line.id, ''); // Assign to Narrator/Unassigned
-                          setIsDropdownOpen(false);
-                      }}
-                      className="px-3 py-2 text-sm text-slate-300 hover:bg-slate-600 cursor-pointer"
-                  >
-                      分配角色...
-                  </li>
-                  {isCharacterMissing && (
-                     <li role="option" className="px-3 py-2 text-sm bg-orange-700 text-orange-100 font-bold cursor-default">待识别角色</li>
+                  {specialCharacters.map(renderCharacterOption)}
+
+                  {(specialCharacters.length > 0 && (chapterCharacters.length > 0 || otherCharacters.length > 0)) && (
+                    <li role="separator"><hr className="my-1 border-slate-600" /></li>
                   )}
 
-                  {chapterCharacters.map(renderCharacterOption)}
+                  {chapterCharacters.length > 0 && (
+                    <>
+                      <li role="separator" className="px-3 py-1 text-xs text-slate-400 font-semibold sticky top-0 bg-slate-800 z-10">
+                        本章角色
+                      </li>
+                      {chapterCharacters.map(renderCharacterOption)}
+                    </>
+                  )}
 
                   {chapterCharacters.length > 0 && otherCharacters.length > 0 && (
-                    <li role="separator" aria-orientation="horizontal">
-                      <hr className="my-1 border-slate-600" />
-                    </li>
+                    <li role="separator"><hr className="my-1 border-slate-600" /></li>
                   )}
-                  
-                  {otherCharacters.map(renderCharacterOption)}
+
+                  {otherCharacters.length > 0 && (
+                    <>
+                      <li role="separator" className="px-3 py-1 text-xs text-slate-400 font-semibold sticky top-0 bg-slate-800 z-10">
+                        其他角色
+                      </li>
+                      {otherCharacters.map(renderCharacterOption)}
+                    </>
+                  )}
+
+                  {(chapterCharacters.length > 0 || otherCharacters.length > 0 || specialCharacters.length > 0) && (
+                    <li role="separator"><hr className="my-1 border-slate-600" /></li>
+                  )}
+                  <li
+                    role="option"
+                    onClick={() => { onAssignCharacter(line.id, ''); setIsDropdownOpen(false); }}
+                    className="px-3 py-2 text-sm text-slate-300 hover:bg-slate-600 cursor-pointer"
+                  >
+                    [取消分配]
+                  </li>
                 </ul>
               </div>
             )}

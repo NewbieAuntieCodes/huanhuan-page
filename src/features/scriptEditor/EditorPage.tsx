@@ -227,11 +227,11 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
             }
         } catch (error) {
             console.error("读取或解析文件时出错:", error);
-            // FIX: The 'error' object in a catch block is of type 'unknown'. Use an 'instanceof Error' type guard to safely access the 'message' property and prevent a TypeScript error.
             let errorMessage = "读取或解析文件时出错: 未知错误";
             if (error instanceof Error) {
                 errorMessage = `读取或解析文件时出错: ${error.message}`;
-                if (error.message.toLowerCase().includes('central directory')) {
+                // FIX: The type of `error.message` was not being correctly inferred as a string. Added a `typeof` check to explicitly narrow the type and ensure `toLowerCase` can be called safely.
+                if (typeof error.message === 'string' && error.message.toLowerCase().includes('central directory')) {
                     errorMessage = '无法读取该 .docx 文件。文件可能已损坏，或者它是一个旧版 .doc 文件但扩展名被错误地改成了 .docx。请尝试在Word中打开并重新另存为 .docx 格式。';
                 }
             }
