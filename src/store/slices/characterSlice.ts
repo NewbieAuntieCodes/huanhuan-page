@@ -18,7 +18,7 @@ export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice
   addCharacter: (characterToAdd, projectId) => {
     const state = get();
     
-    // Global characters (like Narrator) can exist. Project-specific characters are checked with projectId.
+    // Check for existing character within the same project.
     const existingByName = state.characters.find(c => 
       c.name.toLowerCase() === characterToAdd.name.toLowerCase() && 
       c.projectId === projectId &&
@@ -46,51 +46,65 @@ export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice
     return finalCharacter;
   },
   editCharacter: async (characterBeingEdited, updatedCvNameFromModalProp, updatedCvBgColorFromModalProp, updatedCvTextColorFromModalProp) => {
-    const { projects, characters } = get();
     const projectId = characterBeingEdited.projectId || get().selectedProjectId;
     if (!projectId) {
       console.error("Cannot edit character/CV: No project context.");
       alert("错误：无法在没有选定项目的情况下编辑角色。");
       return;
     }
-
-    const projectToUpdate = projects.find(p => p.id === projectId);
-    if (!projectToUpdate) {
-      console.error(`Project with ID ${projectId} not found.`);
+  
+    // Prepare data for DB update based on the state right before the async call.
+    const { projects } = get();
+    const projectToUpdateForDb = projects.find(p => p.id === projectId);
+    if (!projectToUpdateForDb) {
+      console.error(`Project with ID ${projectId} not found when preparing DB update.`);
       return;
     }
-    
+  
     const trimmedCvName = (updatedCvNameFromModalProp || '').trim();
-
-    // Update Project's CV Styles
-    let newProjectCvStyles = { ...(projectToUpdate.cvStyles || {}) };
+    let newProjectCvStylesForDb = { ...(projectToUpdateForDb.cvStyles || {}) };
     if (trimmedCvName && updatedCvBgColorFromModalProp && updatedCvTextColorFromModalProp) {
-        newProjectCvStyles[trimmedCvName] = { bgColor: updatedCvBgColorFromModalProp, textColor: updatedCvTextColorFromModalProp };
+        newProjectCvStylesForDb[trimmedCvName] = { bgColor: updatedCvBgColorFromModalProp, textColor: updatedCvTextColorFromModalProp };
     }
-    const updatedProject = { ...projectToUpdate, cvStyles: newProjectCvStyles };
-
-    // Prepare the final character data to be saved
-    const finalCharacterData = { ...characterBeingEdited, cvName: trimmedCvName };
-
-    // If style is not locked, sync it with the CV style
-    if (!finalCharacterData.isStyleLockedToCv && trimmedCvName && newProjectCvStyles[trimmedCvName]) {
-        finalCharacterData.color = newProjectCvStyles[trimmedCvName].bgColor;
-        finalCharacterData.textColor = newProjectCvStyles[trimmedCvName].textColor;
+    const updatedProjectForDb = { ...projectToUpdateForDb, cvStyles: newProjectCvStylesForDb };
+  
+    const finalCharacterDataForDb = { ...characterBeingEdited, cvName: trimmedCvName };
+    if (!finalCharacterDataForDb.isStyleLockedToCv && trimmedCvName && newProjectCvStylesForDb[trimmedCvName]) {
+        finalCharacterDataForDb.color = newProjectCvStylesForDb[trimmedCvName].bgColor;
+        finalCharacterDataForDb.textColor = newProjectCvStylesForDb[trimmedCvName].textColor;
     }
-
-    // Create the new characters array for state update
-    const updatedCharacters = characters.map(c => c.id === finalCharacterData.id ? finalCharacterData : c);
-
-    // Perform DB operations in a transaction
+  
+    // Perform DB operations.
     await db.transaction('rw', db.projects, db.characters, async () => {
-        await db.projects.put(updatedProject);
-        await db.characters.put(finalCharacterData);
+        await db.projects.put(updatedProjectForDb);
+        await db.characters.put(finalCharacterDataForDb);
     });
     
-    // Update state
-    set({ 
-        projects: projects.map(p => p.id === projectId ? updatedProject : p),
-        characters: updatedCharacters 
+    // Update state using a functional update to prevent race conditions from stale state.
+    set((state) => {
+      const projectToUpdate = state.projects.find(p => p.id === projectId);
+      if (!projectToUpdate) {
+        console.warn(`Project with ID ${projectId} not found in state during update, skipping.`);
+        return state;
+      }
+  
+      const trimmedCvName = (updatedCvNameFromModalProp || '').trim();
+      let newProjectCvStyles = { ...(projectToUpdate.cvStyles || {}) };
+      if (trimmedCvName && updatedCvBgColorFromModalProp && updatedCvTextColorFromModalProp) {
+          newProjectCvStyles[trimmedCvName] = { bgColor: updatedCvBgColorFromModalProp, textColor: updatedCvTextColorFromModalProp };
+      }
+      const updatedProject = { ...projectToUpdate, cvStyles: newProjectCvStyles };
+  
+      const finalCharacterData = { ...characterBeingEdited, cvName: trimmedCvName };
+      if (!finalCharacterData.isStyleLockedToCv && trimmedCvName && newProjectCvStyles[trimmedCvName]) {
+          finalCharacterData.color = newProjectCvStyles[trimmedCvName].bgColor;
+          finalCharacterData.textColor = newProjectCvStyles[trimmedCvName].textColor;
+      }
+  
+      return {
+        projects: state.projects.map(p => p.id === projectId ? updatedProject : p),
+        characters: state.characters.map(c => c.id === finalCharacterData.id ? finalCharacterData : c),
+      };
     });
   },
   deleteCharacter: async (characterId) => {
@@ -100,10 +114,11 @@ export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice
     let updatedProjects = state.projects;
     let needsProjectUpdate = false;
 
-    // Do not allow deleting global default characters
-    if (charToDelete && !charToDelete.projectId) {
-      alert(`无法删除默认角色: ${charToDelete.name}`);
-      return;
+    // Prevent deleting certain default characters even if project-scoped
+    const PROTECTED_NAMES = ['[静音]', '音效', '待识别角色'];
+    if (charToDelete && PROTECTED_NAMES.includes(charToDelete.name)) {
+       alert(`无法删除默认的功能性角色: ${charToDelete.name}`);
+       return;
     }
 
     if (charToDelete && charToDelete.status === 'merged') {
@@ -144,10 +159,13 @@ export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice
     const state = get();
     
     const charsToDelete = state.characters.filter(c => characterIds.includes(c.id));
-    const globalCharsFound = charsToDelete.filter(c => !c.projectId);
+    
+    // Prevent deleting certain default characters even if project-scoped
+    const PROTECTED_NAMES = ['[静音]', '音效', '待识别角色'];
+    const protectedCharsFound = charsToDelete.filter(c => PROTECTED_NAMES.includes(c.name));
 
-    if (globalCharsFound.length > 0) {
-        alert(`无法批量删除默认角色: ${globalCharsFound.map(c => c.name).join(', ')}`);
+    if (protectedCharsFound.length > 0) {
+        alert(`无法批量删除默认的功能性角色: ${protectedCharsFound.map(c => c.name).join(', ')}`);
         return;
     }
     
@@ -187,7 +205,7 @@ export const createCharacterSlice: StateCreator<AppState, [], [], CharacterSlice
     const characterToUpdate = characters.find(c => c.id === characterId);
     if (!characterToUpdate) return;
     
-    // Can't toggle lock for global characters
+    // Can't toggle lock for global characters, though this is now less likely to happen
     if (!characterToUpdate.projectId) return;
 
     const project = projects.find(p => p.id === characterToUpdate.projectId);

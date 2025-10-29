@@ -22,6 +22,13 @@ export interface AppState extends UiSlice, ProjectSlice, CharacterSlice, MergeSl
   updateCharacterColorPresets: (presets: PresetColor[]) => Promise<void>;
 }
 
+const defaultCharConfigs = [
+  { name: '[静音]', color: 'bg-slate-700', textColor: 'text-slate-400', description: '用于标记无需录制的旁白提示' },
+  { name: 'Narrator', color: 'bg-slate-600', textColor: 'text-slate-100', description: '默认旁白角色' },
+  { name: '待识别角色', color: 'bg-orange-400', textColor: 'text-black', description: '由系统自动识别但尚未分配的角色' },
+  { name: '音效', color: 'bg-transparent', textColor: 'text-red-500', description: '用于标记音效的文字描述' },
+];
+
 export const useStore = create<AppState>((set, get, api) => ({
   // Spread slice creators, passing set, get, and api
   ...createUiSlice(set, get, api),
@@ -38,7 +45,7 @@ export const useStore = create<AppState>((set, get, api) => ({
     try {
       const [
         projectsFromDb,
-        characters,
+        charactersFromDb,
         mergeHistoryItem,
         cvColorPresetsItem,
         characterColorPresetsItem,
@@ -72,48 +79,46 @@ export const useStore = create<AppState>((set, get, api) => ({
         characterColorPresets = defaultCharacterPresetColors;
         await db.misc.put({ key: 'characterColorPresets', value: characterColorPresets });
       }
-
-      let initialView: AppView = "dashboard";
-      if (projects.length === 0) {
-        initialView = "upload";
-      }
-
-      const processedCharacters = characters.map((char: Character) => ({
+      
+      const processedCharacters = charactersFromDb.map((char: Character) => ({
         ...char,
         isStyleLockedToCv: char.isStyleLockedToCv || false,
         status: char.status || 'active',
       }));
 
-      // Ensure default characters exist
-      const defaultCharsToAdd: Character[] = [];
-      const defaultCharConfigs = [
-        { name: '[静音]', color: 'bg-slate-700', textColor: 'text-slate-400', description: '用于标记无需录制的旁白提示' },
-        { name: 'Narrator', color: 'bg-slate-600', textColor: 'text-slate-100', description: '默认旁白角色' },
-        { name: '待识别角色', color: 'bg-orange-400', textColor: 'text-black', description: '由系统自动识别但尚未分配的角色' },
-        { name: '音效', color: 'bg-transparent', textColor: 'text-red-500', description: '用于标记音效的文字描述' },
-      ];
-
-      for (const config of defaultCharConfigs) {
-        if (!processedCharacters.some(c => c.name === config.name && !c.projectId)) { // Check for global defaults
-          const newChar: Character = {
-            id: Date.now().toString() + "_char_default_" + Math.random(),
-            name: config.name,
-            color: config.color,
-            textColor: config.textColor,
-            description: config.description,
-            cvName: '',
-            isStyleLockedToCv: false,
-            status: 'active',
-          };
-          defaultCharsToAdd.push(newChar);
+      // --- Project-specific default character migration ---
+      const charactersToCreate: Character[] = [];
+      projects.forEach(proj => {
+        const projectChars = processedCharacters.filter(c => c.projectId === proj.id);
+        for (const config of defaultCharConfigs) {
+          if (!projectChars.some(c => c.name === config.name)) {
+            const newChar: Character = {
+              id: Date.now().toString() + `_char_default_${proj.id}_` + Math.random(),
+              name: config.name,
+              projectId: proj.id,
+              color: config.color,
+              textColor: config.textColor,
+              description: config.description,
+              cvName: '',
+              isStyleLockedToCv: false,
+              status: 'active',
+            };
+            charactersToCreate.push(newChar);
+          }
         }
+      });
+      
+      if (charactersToCreate.length > 0) {
+        await db.characters.bulkAdd(charactersToCreate);
+        processedCharacters.push(...charactersToCreate);
       }
+      // --- End migration ---
 
-      if (defaultCharsToAdd.length > 0) {
-        await db.characters.bulkAdd(defaultCharsToAdd);
-        processedCharacters.push(...defaultCharsToAdd);
+      let initialView: AppView = "dashboard";
+      if (projects.length === 0) {
+        initialView = "upload";
       }
-
+      
       set({
         projects,
         characters: processedCharacters,

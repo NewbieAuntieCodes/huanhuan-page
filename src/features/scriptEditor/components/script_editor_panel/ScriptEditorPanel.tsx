@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Chapter, ScriptLine, Character } from '../../../../types';
 import ScriptLineItem from './ScriptLineItem';
 import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
@@ -70,6 +70,15 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
     }
   }, [isEditingHeaderTitle]);
 
+
+  const characterIdsInChapter = useMemo(() => {
+    if (!selectedChapter) return new Set<string>();
+    return new Set(
+      selectedChapter.scriptLines
+        .map(line => line.characterId)
+        .filter((id): id is string => !!id)
+    );
+  }, [selectedChapter]);
 
   if (!selectedChapter) {
     return (
@@ -241,6 +250,7 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               key={line.id}
               line={line}
               characters={characters} // From context
+              characterIdsInChapter={characterIdsInChapter}
               // FIX: Call the correct prop functions `onUpdateScriptLineText` and `onAssignCharacterToLine`.
               onUpdateText={(lineId, newText) => onUpdateScriptLineText(selectedChapter.id, lineId, newText)}
               onAssignCharacter={(lineId, charId) => onAssignCharacterToLine(selectedChapter.id, lineId, charId)}

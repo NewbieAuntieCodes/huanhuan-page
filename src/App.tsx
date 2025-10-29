@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useCallback, useMemo } from 'react';
 import { useStore }  from './store/useStore';
 // FIX: Add CVStylesMap to imports for explicit typing of useMemo.
@@ -96,6 +97,9 @@ const App: React.FC = () => {
           )}
           {currentView !== "audioAlignment" && projects.length > 0 && ( 
              <button onClick={() => navigateTo("audioAlignment")} className="text-sm text-sky-300 hover:text-sky-100">音频对轨</button>
+          )}
+          {currentView !== "audioAlignmentAssistant" && projects.length > 0 && (
+             <button onClick={() => navigateTo("audioAlignmentAssistant")} className="text-sm text-sky-300 hover:text-sky-100">对轨助手</button>
           )}
           {currentView !== "cvManagement" && characters.length > 0 && (
              <button onClick={() => navigateTo("cvManagement")} className="text-sm text-sky-300 hover:text-sky-100">CV管理</button>

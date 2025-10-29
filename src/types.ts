@@ -85,7 +85,7 @@ export interface MergeHistoryEntry {
 }
 
 // Fix: Moved from App.tsx to break circular dependencies
-export type AppView = "upload" | "dashboard" | "editor" | "audioAlignment" | "cvManagement" | "voiceLibrary";
+export type AppView = "upload" | "dashboard" | "editor" | "audioAlignment" | "cvManagement" | "voiceLibrary" | "audioAlignmentAssistant";
 
 export interface CVStyle {
   bgColor: string;
@@ -98,4 +98,17 @@ export interface PresetColor {
   name: string;
   bgColorClass: string;
   textColorClass: string;
+}
+
+export interface ParsedFileInfo {
+  chapters: number[];
+  characterName: string | null;
+  cvName: string | null;
+}
+
+export interface AudioAssistantState {
+  projectId: string;
+  directoryName: string | null;
+  scannedFiles: ParsedFileInfo[];
+  manualOverrides: Record<string, boolean>;
 }

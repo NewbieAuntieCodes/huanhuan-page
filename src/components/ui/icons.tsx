@@ -159,6 +159,12 @@ export const CogIcon: React.FC<IconProps> = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
+export const FolderOpenIcon: React.FC<IconProps> = ({ className = "w-5 h-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.75v6.75A2.25 2.25 0 006 18.75h12A2.25 2.25 0 0020.25 16.5V9.75m-16.5 0S3 8.25 3 7.5a3 3 0 013-3h3.75l2.25 2.25H18a3 3 0 013 3v1.5" />
+  </svg>
+);
+
 export const ArrowsRightLeftIcon: React.FC<IconProps> = ({ className = "w-5 h-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h18m-7.5-14L21 7.5m0 0L16.5 12M21 7.5H3" />

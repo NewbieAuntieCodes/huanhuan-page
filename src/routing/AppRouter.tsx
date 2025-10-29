@@ -6,6 +6,7 @@ import EditorPage from '../features/scriptEditor/EditorPage';
 import AudioAlignmentPage from '../features/audioAlignment/AudioAlignmentPage';
 import CvManagementPage from '../features/cvManagement/CvManagementPage';
 import VoiceLibraryPage from '../features/voiceLibrary/VoiceLibraryPage';
+import AudioAlignmentAssistantPage from '../features/audioAlignmentAssistant/AudioAlignmentAssistantPage';
 import { Character } from '../types';
 
 const AppRouter: React.FC = () => {
@@ -81,6 +82,9 @@ const AppRouter: React.FC = () => {
       
     case 'audioAlignment':
         return <AudioAlignmentPage />;
+
+    case 'audioAlignmentAssistant':
+        return <AudioAlignmentAssistantPage />;
       
     case 'cvManagement':
       return <CvManagementPage />;

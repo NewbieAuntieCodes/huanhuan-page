@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ScriptLine, Character } from '../../../../types';
 import { UserCircleIcon, MagnifyingGlassIcon, ChevronDownIcon } from '../../../../components/ui/icons';
 import { isHexColor, getContrastingTextColor } from '../../../../lib/colorUtils';
@@ -6,6 +6,7 @@ import { isHexColor, getContrastingTextColor } from '../../../../lib/colorUtils'
 interface ScriptLineItemProps {
   line: ScriptLine;
   characters: Character[];
+  characterIdsInChapter: Set<string>;
   onUpdateText: (lineId: string, newText: string) => void;
   onAssignCharacter: (lineId: string, characterId: string) => void;
   onMergeLines: (lineId: string) => void;
@@ -30,6 +31,7 @@ const isDialogue = (text: string): boolean => {
 const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   line,
   characters,
+  characterIdsInChapter,
   onUpdateText,
   onAssignCharacter,
   onMergeLines,
@@ -72,9 +74,27 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
     };
   }, [isDropdownOpen, isSoundTypeDropdownOpen]);
 
-  const filteredCharacters = characters.filter(c =>
-    c.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const { chapterCharacters, otherCharacters } = useMemo(() => {
+    const chapterChars: Character[] = [];
+    const otherChars: Character[] = [];
+    const lowerSearchTerm = searchTerm.toLowerCase();
+
+    characters.forEach(c => {
+        if (c.name.toLowerCase().includes(lowerSearchTerm)) {
+            if (characterIdsInChapter.has(c.id)) {
+                chapterChars.push(c);
+            } else {
+                otherChars.push(c);
+            }
+        }
+    });
+
+    chapterChars.sort((a, b) => a.name.localeCompare(b.name));
+    otherChars.sort((a, b) => a.name.localeCompare(b.name));
+
+    return { chapterCharacters: chapterChars, otherCharacters: otherChars };
+  }, [characters, searchTerm, characterIdsInChapter]);
+
 
   const getCharacterSelectStyle = () => {
     if (isSilentLine) {
@@ -206,6 +226,34 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   
   const isLit = !!line.soundType && line.soundType !== '清除';
 
+  const renderCharacterOption = (c: Character) => {
+    const optionBgIsHex = isHexColor(c.color);
+    const optionTextIsHex = isHexColor(c.textColor || '');
+    const style = {
+      backgroundColor: optionBgIsHex ? c.color : undefined,
+      color: optionTextIsHex ? c.textColor : undefined,
+    };
+    const className = `w-full text-left px-3 py-2 text-sm cursor-pointer hover:opacity-80 ${
+      optionBgIsHex ? '' : c.color
+    } ${optionTextIsHex ? '' : c.textColor || 'text-slate-100'}`;
+
+    return (
+      <li
+        key={c.id}
+        role="option"
+        aria-selected={line.characterId === c.id}
+        onClick={() => {
+          onAssignCharacter(line.id, c.id);
+          setIsDropdownOpen(false);
+        }}
+        className={className}
+        style={style}
+      >
+        {c.name}
+      </li>
+    );
+  };
+
   return (
     <div className={`p-3 mb-2 rounded-lg border flex items-center gap-3 transition-all duration-150 ${isSilentLine ? 'border-slate-800 opacity-70' : 'border-slate-700'} hover:border-slate-600 ${line.isAiAudioLoading ? 'opacity-70' : ''}`}>
       
@@ -294,31 +342,16 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
                   {isCharacterMissing && (
                      <li role="option" className="px-3 py-2 text-sm bg-orange-700 text-orange-100 font-bold cursor-default">待识别角色</li>
                   )}
-                  {filteredCharacters.map(c => {
-                    const optionBgIsHex = isHexColor(c.color);
-                    const optionTextIsHex = isHexColor(c.textColor || '');
-                    const style = {
-                        backgroundColor: optionBgIsHex ? c.color : undefined, 
-                        color: optionTextIsHex ? c.textColor : undefined 
-                    };
-                    const className = `hover:opacity-80 ${optionBgIsHex ? '' : c.color} ${optionTextIsHex ? '' : c.textColor || 'text-slate-100'}`;
 
-                    return (
-                      <li
-                        key={c.id}
-                        role="option"
-                        aria-selected={line.characterId === c.id}
-                        onClick={() => {
-                          onAssignCharacter(line.id, c.id);
-                          setIsDropdownOpen(false);
-                        }}
-                        className={`px-3 py-2 text-sm cursor-pointer ${className}`}
-                        style={style}
-                      >
-                        {c.name}
-                      </li>
-                    );
-                  })}
+                  {chapterCharacters.map(renderCharacterOption)}
+
+                  {chapterCharacters.length > 0 && otherCharacters.length > 0 && (
+                    <li role="separator" aria-orientation="horizontal">
+                      <hr className="my-1 border-slate-600" />
+                    </li>
+                  )}
+                  
+                  {otherCharacters.map(renderCharacterOption)}
                 </ul>
               </div>
             )}

@@ -1,10 +1,16 @@
 import { StateCreator } from 'zustand';
 import { AppState } from '../useStore';
-import { Project, Collaborator, Chapter, AudioBlob, ScriptLine } from '../../types';
+import { Project, Collaborator, Chapter, AudioBlob, ScriptLine, Character } from '../../types';
 import { db } from '../../db';
 import { splitAudio, mergeAudio } from '../../lib/audioProcessing';
 import { calculateShiftChain, ShiftMode } from '../../lib/shiftChainUtils';
 
+const defaultCharConfigs = [
+  { name: '[静音]', color: 'bg-slate-700', textColor: 'text-slate-400', description: '用于标记无需录制的旁白提示' },
+  { name: 'Narrator', color: 'bg-slate-600', textColor: 'text-slate-100', description: '默认旁白角色' },
+  { name: '待识别角色', color: 'bg-orange-400', textColor: 'text-black', description: '由系统自动识别但尚未分配的角色' },
+  { name: '音效', color: 'bg-transparent', textColor: 'text-red-500', description: '用于标记音效的文字描述' },
+];
 
 export interface ProjectSlice {
   projects: Project[];
@@ -25,11 +31,35 @@ export interface ProjectSlice {
 export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = (set, get, _api) => ({
   projects: [],
   addProject: async (newProject) => {
-    const projectWithExtras = { ...newProject, cvStyles: {} };
-    await db.projects.add(projectWithExtras);
+    const projectWithExtras = { 
+      ...newProject, 
+      cvStyles: {
+        'pb': { bgColor: 'bg-slate-700', textColor: 'text-slate-300' } // Add default style for 'pb'
+      } 
+    };
+    
+    // Create project-specific default characters
+    const defaultCharsForProject: Character[] = defaultCharConfigs.map(config => ({
+      id: Date.now().toString() + `_char_default_${newProject.id}_` + Math.random(),
+      name: config.name,
+      projectId: newProject.id, // Link to this new project
+      color: config.color,
+      textColor: config.textColor,
+      description: config.description,
+      cvName: config.name === 'Narrator' ? 'pb' : '', // Set default CV for Narrator
+      isStyleLockedToCv: false,
+      status: 'active',
+    }));
+
+    await db.transaction('rw', db.projects, db.characters, async () => {
+      await db.projects.add(projectWithExtras);
+      await db.characters.bulkAdd(defaultCharsForProject);
+    });
+
     set(state => {
       const updatedProjects = [projectWithExtras, ...state.projects].sort((a,b) => b.lastModified - a.lastModified);
-      return { projects: updatedProjects };
+      const updatedCharacters = [...state.characters, ...defaultCharsForProject];
+      return { projects: updatedProjects, characters: updatedCharacters };
     });
   },
   updateProject: async (updatedProject) => {
