@@ -8,6 +8,7 @@ interface BatchModifyModalProps {
   onBatchDelete: () => void;
   onBatchMerge: () => void;
   canMerge: boolean;
+  onBatchAdd: () => void;
 }
 
 const BatchModifyModal: React.FC<BatchModifyModalProps> = ({
@@ -17,6 +18,7 @@ const BatchModifyModal: React.FC<BatchModifyModalProps> = ({
   onBatchDelete,
   onBatchMerge,
   canMerge,
+  onBatchAdd,
 }) => {
   if (!isOpen) return null;
 
@@ -33,7 +35,7 @@ const BatchModifyModal: React.FC<BatchModifyModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-slate-850 p-6 rounded-lg shadow-xl w-full max-w-sm border border-slate-700" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-slate-100">批量修改</h2>
+          <h2 className="text-xl font-semibold text-slate-100">批量操作</h2>
         </div>
         <p className="text-sm text-slate-400 mb-6">已选中 <span className="text-sky-400 font-semibold">{selectedCount}</span> 个章节</p>
         
@@ -62,6 +64,10 @@ const BatchModifyModal: React.FC<BatchModifyModalProps> = ({
           <button onClick={() => handleActionClick(onBatchDelete)} className="w-full flex items-center justify-between text-left p-3 bg-red-900/80 hover:bg-red-800/90 rounded-md text-red-100 transition-colors">
             <div className="flex items-center"><TrashIcon className="w-5 h-5 mr-3" /> 批量删除章节</div>
             <span className="text-red-300 font-sans">&gt;</span>
+          </button>
+          <button onClick={() => handleActionClick(onBatchAdd)} className="w-full flex items-center justify-between text-left p-3 bg-green-800/80 hover:bg-green-700/90 rounded-md text-green-100 transition-colors mt-4">
+            <div className="flex items-center"><PlusIcon className="w-5 h-5 mr-3" /> 批量添加章节</div>
+            <span className="text-green-300 font-sans">&gt;</span>
           </button>
         </div>
 

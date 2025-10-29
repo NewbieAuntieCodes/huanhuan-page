@@ -28,6 +28,7 @@ export interface ProjectSlice {
   mergeWithNextAndShift: (projectId: string, chapterId: string, currentLineId: string, shiftMode: ShiftMode) => Promise<void>;
   addCustomSoundType: (projectId: string, soundType: string) => Promise<void>;
   deleteCustomSoundType: (projectId: string, soundType: string) => Promise<void>;
+  batchAddChapters: (projectId: string, count: number) => Promise<void>;
 }
 
 export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = (set, get, _api) => ({
@@ -557,6 +558,55 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     set({
       projects: state.projects.map(p => p.id === projectId ? updatedProject : p)
         .sort((a,b) => b.lastModified - a.lastModified),
+    });
+  },
+  batchAddChapters: async (projectId, count) => {
+    const state = get();
+    const project = state.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    let lastChapterTitle = '';
+    if (project.chapters.length > 0) {
+        lastChapterTitle = project.chapters[project.chapters.length - 1].title;
+    }
+
+    const titleRegex = /^(.*?)(\d+)(.*?)$/;
+    const match = lastChapterTitle.match(titleRegex);
+
+    let baseName = `第`;
+    let startNumber = project.chapters.length + 1;
+    let suffix = `章`;
+
+    if (match) {
+        baseName = match[1];
+        startNumber = parseInt(match[2], 10) + 1;
+        suffix = match[3];
+    } else if (lastChapterTitle) {
+        baseName = `${lastChapterTitle}-`;
+        startNumber = 1;
+        suffix = '';
+    }
+    
+    const newChapters: Chapter[] = [];
+    for (let i = 0; i < count; i++) {
+        const newChapter: Chapter = {
+            id: `ch_${Date.now()}_${i}_${Math.random()}`,
+            title: `${baseName}${startNumber + i}${suffix}`,
+            rawContent: '',
+            scriptLines: [],
+        };
+        newChapters.push(newChapter);
+    }
+    
+    const updatedProject = {
+        ...project,
+        chapters: [...project.chapters, ...newChapters],
+        lastModified: Date.now(),
+    };
+
+    await db.projects.put(updatedProject);
+    set({
+        projects: state.projects.map(p => p.id === projectId ? updatedProject : p)
     });
   },
 });

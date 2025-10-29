@@ -15,6 +15,7 @@ export interface EditorContextType {
   undoableUpdateChapterRawContent: (chapterId: string, newRawContent: string) => void;
   deleteChapters: (chapterIds: string[]) => void;
   mergeChapters: (chapterIds: string[], targetChapterId: string) => void;
+  batchAddChapters: (count: number) => void;
   
   undo: () => void;
   redo: () => void;

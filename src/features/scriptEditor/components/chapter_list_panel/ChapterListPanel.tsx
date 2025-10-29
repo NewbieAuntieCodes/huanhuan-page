@@ -14,6 +14,7 @@ import BatchModifyModal from './BatchModifyModal';
 import MergeChaptersModal from './MergeChaptersModal';
 import ExportScriptModal, { ExportOption } from './ExportScriptModal';
 import { exportChaptersToDocx } from '../../services/docxExporter'; // Import the new service
+import BatchAddChaptersModal from './BatchAddChaptersModal';
 
 const ChapterListPanel: React.FC = () => {
     const {
@@ -34,9 +35,11 @@ const ChapterListPanel: React.FC = () => {
         runManualParseForChapters,
         openImportModal,
         cvFilter,
+        batchAddChapters,
     } = useEditorContext();
 
     const [isBatchModifyModalOpen, setIsBatchModifyModalOpen] = useState(false);
+    const [isBatchAddModalOpen, setIsBatchAddModalOpen] = useState(false);
     const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [lastSelectedChapterForShiftClick, setLastSelectedChapterForShiftClick] = useState<string | null>(null);
@@ -249,14 +252,12 @@ const ChapterListPanel: React.FC = () => {
                 <label htmlFor="select-all-on-page" className="text-sm text-slate-300 select-none">
                     全选当前页 ({multiSelectedChapterIds.length} / {currentProject.chapters.length})
                 </label>
-                {multiSelectedChapterIds.length > 0 && (
-                    <button 
-                        onClick={() => setIsBatchModifyModalOpen(true)}
-                        className="ml-auto text-xs text-sky-300 hover:text-sky-100 bg-slate-700 px-2 py-1 rounded"
-                    >
-                        批量修改...
-                    </button>
-                )}
+                <button 
+                    onClick={() => setIsBatchModifyModalOpen(true)}
+                    className="ml-auto text-xs text-sky-300 hover:text-sky-100 bg-slate-700 px-2 py-1 rounded"
+                >
+                    批量操作...
+                </button>
             </div>
 
             <div className="flex-grow overflow-y-auto space-y-1 pr-1 -mr-1">
@@ -297,6 +298,20 @@ const ChapterListPanel: React.FC = () => {
                 onBatchDelete={handleBatchDelete}
                 onBatchMerge={handleOpenMergeModal}
                 canMerge={canMerge}
+                onBatchAdd={() => {
+                    setIsBatchModifyModalOpen(false);
+                    setIsBatchAddModalOpen(true);
+                }}
+            />
+             <BatchAddChaptersModal
+                isOpen={isBatchAddModalOpen}
+                onClose={() => setIsBatchAddModalOpen(false)}
+                onSave={(count) => {
+                    if (currentProject) {
+                        batchAddChapters(count);
+                    }
+                    setIsBatchAddModalOpen(false);
+                }}
             />
             <MergeChaptersModal
                 isOpen={isMergeModalOpen}

@@ -96,9 +96,10 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     }
   };
 
-  const { addCustomSoundType, deleteCustomSoundType } = useStore(state => ({
+  const { addCustomSoundType, deleteCustomSoundType, batchAddChapters } = useStore(state => ({
     addCustomSoundType: state.addCustomSoundType,
     deleteCustomSoundType: state.deleteCustomSoundType,
+    batchAddChapters: state.batchAddChapters,
   }));
 
 
@@ -226,7 +227,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
             }
         } catch (error) {
             console.error("读取或解析文件时出错:", error);
-            // FIX: Refactored catch block to safely handle the 'error' object (which is of type 'unknown') by using an 'instanceof Error' type guard before accessing the 'message' property. This resolves the TypeScript error.
+            // FIX: The 'error' object in a catch block is of type 'unknown'. Use an 'instanceof Error' type guard to safely access the 'message' property and prevent a TypeScript error.
             let errorMessage = "读取或解析文件时出错: 未知错误";
             if (error instanceof Error) {
                 errorMessage = `读取或解析文件时出错: ${error.message}`;
@@ -389,6 +390,12 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     if (projectId) deleteCustomSoundType(projectId, soundType);
   }, [projectId, deleteCustomSoundType]);
 
+  const handleBatchAddChapters = useCallback((count: number) => {
+      if(projectId) {
+          batchAddChapters(projectId, count);
+      }
+  }, [projectId, batchAddChapters]);
+
   const contextValue = useMemo(() => ({
     ...coreLogic,
     characters: projectCharacters,
@@ -400,6 +407,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     undoableUpdateChapterRawContent: coreLogic.undoableUpdateChapterRawContent,
     deleteChapters: (ids: string[]) => onDeleteChapters(ids, () => undoableDeleteChapters(ids)),
     mergeChapters: undoableMergeChapters,
+    batchAddChapters: handleBatchAddChapters,
     isLoadingAiAnnotation,
     isLoadingManualParse,
     isLoadingImportAnnotation,
@@ -417,7 +425,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     addCustomSoundType: handleAddCustomSoundType,
     deleteCustomSoundType: handleDeleteCustomSoundType,
   }), [
-    coreLogic, projectCharacters, allCvNames, cvStyles, applyUndoableProjectUpdate, onDeleteChapters,
+    coreLogic, projectCharacters, allCvNames, cvStyles, applyUndoableProjectUpdate, onDeleteChapters, handleBatchAddChapters,
     isLoadingAiAnnotation, isLoadingManualParse, isLoadingImportAnnotation,
     handleRunAiAnnotationForChapters, handleManualParseChapters, handleOpenImportModalTrigger,
     handleOpenCharacterSidePanel, onOpenCharacterAndCvStyleModal, handleOpenScriptImport,
