@@ -13,6 +13,9 @@ import ShiftAudioModal from './components/ShiftAudioModal';
 import ShiftUpAudioModal from './components/ShiftUpAudioModal';
 import MergeAudioModal from './components/MergeAudioModal';
 import { useAudioFileMatcher } from './hooks/useAudioFileMatcher';
+import ResizablePanels from '../../components/ui/ResizablePanels';
+import { usePaginatedChapters } from '../scriptEditor/hooks/usePaginatedChapters';
+import ChapterPagination from '../scriptEditor/components/chapter_list_panel/ChapterPagination';
 
 
 const AudioAlignmentPage: React.FC = () => {
@@ -110,6 +113,23 @@ const AudioAlignmentPage: React.FC = () => {
     if (nonAudioCharacterIds.length === 0) return selectedChapter.scriptLines;
     return selectedChapter.scriptLines.filter(line => !nonAudioCharacterIds.includes(line.characterId || ''));
   }, [selectedChapter, nonAudioCharacterIds]);
+  
+  const {
+      currentPage,
+      totalPages,
+      paginatedChapters,
+      handlePageChange,
+  } = usePaginatedChapters({
+      chapters: currentProject?.chapters || [],
+      projectId: currentProject?.id,
+      initialSelectedChapterIdForViewing: selectedChapterId,
+      onSelectChapterForViewing: setSelectedChapterId,
+      multiSelectedChapterIds: [], // Not used here
+      setMultiSelectedChapterIdsContext: () => {}, // Not used here
+      onPageChangeSideEffects: () => {},
+      chaptersPerPage: 50,
+  });
+
 
   const onGoBack = () => {
     selectedProjectId ? navigateTo("editor") : navigateTo("dashboard");
@@ -311,6 +331,36 @@ const AudioAlignmentPage: React.FC = () => {
   
   const hasAudioInProject = currentProject.chapters.some(c => c.scriptLines.some(l => l.audioBlobId));
   
+  const ChapterList = (
+    <div className="p-3 h-full flex flex-col bg-slate-800 text-slate-100">
+      <h2 className="text-lg font-semibold text-slate-300 mb-3">章节列表 ({currentProject.chapters.length})</h2>
+      
+      <div className="flex-grow overflow-y-auto space-y-1 pr-1 -mr-1">
+          {paginatedChapters.map(chapter => (
+              <li key={chapter.id} className="list-none">
+                  <button
+                      onClick={() => setSelectedChapterId(chapter.id)}
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                          selectedChapterId === chapter.id
+                          ? 'bg-sky-600 text-white font-semibold'
+                          : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                      }`}
+                  >
+                     {chapter.title}
+                  </button>
+              </li>
+          ))}
+      </div>
+
+      <ChapterPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          isAnyOperationLoading={false}
+          isEditingTitle={false}
+      />
+    </div>
+  );
 
   return (
     <div className="h-full flex flex-col bg-slate-900 text-slate-100">
@@ -398,56 +448,40 @@ const AudioAlignmentPage: React.FC = () => {
         </div>
       </header>
       <div className="flex flex-grow overflow-hidden">
-        {/* Chapter Sidebar */}
-        <aside className="w-64 bg-slate-800 p-3 flex-shrink-0 overflow-y-auto">
-            <h2 className="text-lg font-semibold text-slate-300 mb-3">章节列表</h2>
-            <ul className="space-y-1">
-                {currentProject.chapters.map(chapter => (
-                    <li key={chapter.id}>
-                        <button
-                            onClick={() => setSelectedChapterId(chapter.id)}
-                            className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                                selectedChapterId === chapter.id
-                                ? 'bg-sky-600 text-white font-semibold'
-                                : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                            }`}
-                        >
-                           {chapter.title}
-                        </button>
-                    </li>
-                ))}
-            </ul>
-        </aside>
-
-        {/* Main Content */}
-        <main 
-            className="flex-grow p-4 overflow-y-auto transition-all" 
-            style={{ paddingBottom: playingLineInfo ? '8rem' : '1rem' }}
-        >
-            {selectedChapter ? (
-                <div>
-                    <h3 className="text-xl font-bold text-sky-300 mb-4">{selectedChapter.title}</h3>
-                    <div className="space-y-3">
-                        {visibleScriptLines.map(line => (
-                            <AudioScriptLine
-                                key={line.id}
-                                line={line}
-                                chapterId={selectedChapter.id}
-                                projectId={currentProject.id}
-                                character={characters.find(c => c.id === line.characterId)}
-                                onRequestShiftDown={handleRequestShiftDown}
-                                onRequestShiftUp={handleRequestShiftUp}
-                            />
-                        ))}
+        <ResizablePanels
+          leftPanel={ChapterList}
+          rightPanel={
+             <main 
+                className="flex-grow p-4 overflow-y-auto transition-all" 
+                style={{ paddingBottom: playingLineInfo ? '8rem' : '1rem' }}
+            >
+                {selectedChapter ? (
+                    <div>
+                        <h3 className="text-xl font-bold text-sky-300 mb-4">{selectedChapter.title}</h3>
+                        <div className="space-y-3">
+                            {visibleScriptLines.map(line => (
+                                <AudioScriptLine
+                                    key={line.id}
+                                    line={line}
+                                    chapterId={selectedChapter.id}
+                                    projectId={currentProject.id}
+                                    character={characters.find(c => c.id === line.characterId)}
+                                    onRequestShiftDown={handleRequestShiftDown}
+                                    onRequestShiftUp={handleRequestShiftUp}
+                                />
+                            ))}
+                        </div>
                     </div>
-                </div>
-            ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center text-slate-500">
-                    <BookOpenIcon className="w-16 h-16 mb-4"/>
-                    <p className="text-lg">请从左侧选择一个章节开始对轨。</p>
-                </div>
-            )}
-        </main>
+                ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-center text-slate-500">
+                        <BookOpenIcon className="w-16 h-16 mb-4"/>
+                        <p className="text-lg">请从左侧选择一个章节开始对轨。</p>
+                    </div>
+                )}
+            </main>
+          }
+          initialLeftWidthPercent={25}
+        />
       </div>
       <GlobalAudioPlayer 
         onSplitRequest={handleSplitRequest} 

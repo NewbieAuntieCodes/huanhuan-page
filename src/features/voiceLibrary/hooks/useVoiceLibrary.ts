@@ -59,11 +59,12 @@ const getChapterNumber = (title: string): number | null => {
 
 // --- Main Hook ---
 export const useVoiceLibrary = () => {
-    const { projects, characters, selectedProjectId, assignAudioToLine } = useStore(state => ({
+    const { projects, characters, selectedProjectId, assignAudioToLine, selectedChapterId } = useStore(state => ({
         projects: state.projects,
         characters: state.characters,
         selectedProjectId: state.selectedProjectId,
         assignAudioToLine: state.assignAudioToLine,
+        selectedChapterId: state.selectedChapterId,
     }));
 
     const [rows, setRows] = useState<VoiceLibraryRowState[]>([]);
@@ -75,6 +76,7 @@ export const useVoiceLibrary = () => {
     const [generatedAudioUrls, setGeneratedAudioUrls] = useState<Record<string, string>>({});
 
     const objectUrlsRef = useRef<Record<string, string>>({});
+    const syncedChapterIdRef = useRef<string | null>(null);
 
     // Cleanup object URLs on unmount
     useEffect(() => {
@@ -114,6 +116,20 @@ export const useVoiceLibrary = () => {
     }, []);
 
     useEffect(() => { handleCheckServerHealth(); }, [handleCheckServerHealth]);
+
+    // Effect to sync chapter selection from other pages
+    useEffect(() => {
+        if (currentProject && selectedChapterId && selectedChapterId !== syncedChapterIdRef.current) {
+            const chapter = currentProject.chapters.find(c => c.id === selectedChapterId);
+            if (chapter) {
+                const chapterNum = getChapterNumber(chapter.title);
+                if (chapterNum !== null) {
+                    setChapterFilter(String(chapterNum));
+                    syncedChapterIdRef.current = selectedChapterId;
+                }
+            }
+        }
+    }, [selectedChapterId, currentProject]);
 
     // Effect to create/revoke Object URLs for generated audio from DB
     useEffect(() => {
