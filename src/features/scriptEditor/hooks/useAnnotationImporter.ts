@@ -35,11 +35,31 @@ export const useAnnotationImporter = ({
     const charactersWithCvToUpdate = new Map<string, string>();
 
     try {
-      const lines = annotatedText.split(/\r?\n/).filter(line => line.trim() !== '');
-      const annotationRegex = /【(.*?)】“([\s\S]*)”/;
-      
+      // New logic: Parse all annotations from the pasted text into a map first.
+      const annotationMap = new Map<string, { charName: string, cvName?: string }>();
+      const annotationRegex = /【(.*?)】“([\s\S]*?)”/g;
+      let match;
+      while ((match = annotationRegex.exec(annotatedText)) !== null) {
+          const speakerTag = match[1].trim();
+          const dialogueContent = match[2];
+          
+          let charName = speakerTag;
+          let cvName: string | undefined = undefined;
+
+          const parts = speakerTag.split(/[-－–—]/);
+          if (parts.length > 1) {
+              const potentialCv = parts[0].trim();
+              const potentialCharName = parts.slice(1).join('-').trim();
+              if (potentialCv && potentialCharName) {
+                  cvName = potentialCv;
+                  charName = potentialCharName;
+              }
+          }
+          // Store by dialogue content. If duplicate dialogues exist, the last one wins.
+          annotationMap.set(dialogueContent, { charName, cvName });
+      }
+
       const newCharacterMap = new Map<string, Character>();
-      const usedAnnotationIndices = new Set<number>();
 
       applyUndoableProjectUpdate(prevProject => {
         return {
@@ -51,66 +71,46 @@ export const useAnnotationImporter = ({
                 if (!dialogueContentMatch) return line;
                 const dialogueContent = dialogueContentMatch[1];
 
-                const matchingAnnotationIndex = lines.findIndex((annotatedLine, index) => {
-                   if (usedAnnotationIndices.has(index)) return false; // Skip used annotations
-                   const annotationMatch = annotatedLine.match(annotationRegex);
-                   return annotationMatch && annotationMatch[2] === dialogueContent;
-                });
+                const annotation = annotationMap.get(dialogueContent);
 
-                if (matchingAnnotationIndex !== -1) {
-                  usedAnnotationIndices.add(matchingAnnotationIndex); // Mark as used
-                  const matchingAnnotation = lines[matchingAnnotationIndex];
-                  const annotationMatch = matchingAnnotation.match(annotationRegex);
-                  if (annotationMatch && annotationMatch[1]) {
-                    const nameAndCv = annotationMatch[1].trim();
-                    let charName = nameAndCv;
-                    let cvName: string | undefined = undefined;
+                if (annotation) {
+                  const { charName, cvName } = annotation;
 
-                    const parts = nameAndCv.split(/[-－–—]/);
-                    if (parts.length > 1) {
-                        const potentialCv = parts[0].trim();
-                        const potentialCharName = parts.slice(1).join('-').trim();
-                        if (potentialCv && potentialCharName) {
-                            cvName = potentialCv;
-                            charName = potentialCharName;
-                        }
-                    }
-
-                    let character = Array.from(newCharacterMap.values()).find(c => c.name.toLowerCase() === charName.toLowerCase());
-                    if (!character) {
-                        const existingInStore = useStore.getState().characters.find(c => 
-                            c.name.toLowerCase() === charName.toLowerCase() && 
-                            (!c.projectId || c.projectId === prevProject.id) &&
-                            c.status !== 'merged'
-                        );
-                        if (existingInStore) {
-                            character = existingInStore;
-                        }
-                    }
-
-                    if (!character) {
-                        const availableColors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-400', 'bg-purple-600', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'];
-                        const availableTextColors = ['text-red-100', 'text-blue-100', 'text-green-100', 'text-yellow-800', 'text-purple-100', 'text-pink-100', 'text-indigo-100', 'text-teal-100'];
-                        const colorIndex = newCharacterMap.size % availableColors.length;
-                        
-                        character = onAddCharacter({
-                           name: charName, 
-                           color: availableColors[colorIndex], 
-                           textColor: availableTextColors[colorIndex],
-                           cvName: cvName,
-                           description: '',
-                           isStyleLockedToCv: false
-                        });
-                        newCharacterMap.set(charName, character);
-                    }
-                    
-                    if (cvName && (!character.cvName || character.cvName.toLowerCase() !== cvName.toLowerCase())) {
-                       charactersWithCvToUpdate.set(character.id, cvName);
-                    }
-                    
-                    return { ...line, characterId: character.id };
+                  let character = Array.from(newCharacterMap.values()).find(c => c.name.toLowerCase() === charName.toLowerCase());
+                  if (!character) {
+                      const existingInStore = useStore.getState().characters.find(c => 
+                          c.name.toLowerCase() === charName.toLowerCase() && 
+                          (!c.projectId || c.projectId === prevProject.id) &&
+                          c.status !== 'merged'
+                      );
+                      if (existingInStore) {
+                          character = existingInStore;
+                      }
                   }
+
+                  if (!character) {
+                      const availableColors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-400', 'bg-purple-600', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'];
+                      const availableTextColors = ['text-red-100', 'text-blue-100', 'text-green-100', 'text-yellow-800', 'text-purple-100', 'text-pink-100', 'text-indigo-100', 'text-teal-100'];
+                      const colorIndex = newCharacterMap.size % availableColors.length;
+                      
+                      character = onAddCharacter({
+                         name: charName, 
+                         color: availableColors[colorIndex], 
+                         textColor: availableTextColors[colorIndex],
+                         cvName: cvName,
+                         description: '',
+                         isStyleLockedToCv: false
+                      });
+                      newCharacterMap.set(charName, character);
+                  }
+                  
+                  if (cvName && (!character.cvName || character.cvName.toLowerCase() !== cvName.toLowerCase())) {
+                     charactersWithCvToUpdate.set(character.id, cvName);
+                  }
+                  
+                  return { ...line, characterId: character.id };
                 }
+                
                 return line;
               });
               return { ...ch, scriptLines: updatedScriptLines };
