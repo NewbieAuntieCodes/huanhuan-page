@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { useStore } from '../../store/useStore';
-import { ChevronLeftIcon, BookOpenIcon, UploadIcon, UserCircleIcon, ListBulletIcon, ArrowDownTrayIcon, SpeakerXMarkIcon } from '../../components/ui/icons';
+import { ChevronLeftIcon, BookOpenIcon, UploadIcon, UserCircleIcon, ListBulletIcon, ArrowDownTrayIcon, SpeakerXMarkIcon, CogIcon } from '../../components/ui/icons';
 import AudioScriptLine from './components/AudioScriptLine';
 import GlobalAudioPlayer from './components/GlobalAudioPlayer';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
@@ -16,6 +16,7 @@ import { useAudioFileMatcher } from './hooks/useAudioFileMatcher';
 import ResizablePanels from '../../components/ui/ResizablePanels';
 import { usePaginatedChapters } from '../scriptEditor/hooks/usePaginatedChapters';
 import ChapterPagination from '../scriptEditor/components/chapter_list_panel/ChapterPagination';
+import SilenceSettingsModal from './components/SilenceSettingsModal';
 
 
 const AudioAlignmentPage: React.FC = () => {
@@ -57,6 +58,7 @@ const AudioAlignmentPage: React.FC = () => {
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSilenceSettingsModalOpen, setIsSilenceSettingsModalOpen] = useState(false);
   
   const [splitModalInfo, setSplitModalInfo] = useState<{ isOpen: boolean; lineId: string | null; character: Character | undefined, splitTime: number | null }>({
     isOpen: false,
@@ -182,7 +184,8 @@ const AudioAlignmentPage: React.FC = () => {
             return;
         }
 
-        const waveBlob = await exportAudioWithMarkers(linesWithAudio);
+        // FIX: Pass the `characters` array to `exportAudioWithMarkers` to match its updated signature.
+        const waveBlob = await exportAudioWithMarkers(linesWithAudio, currentProject, characters);
         
         const url = URL.createObjectURL(waveBlob);
         const a = document.createElement('a');
@@ -292,22 +295,17 @@ const AudioAlignmentPage: React.FC = () => {
         return { canMerge: false, reason: "这是本章最后一句台词。" };
     }
 
-    // Find the next line with the same character
-    for (let i = lineIndex + 1; i < selectedChapter.scriptLines.length; i++) {
-        const potentialNextLine = selectedChapter.scriptLines[i];
-        if (potentialNextLine.characterId === currentLine.characterId) {
-            // Found the next line by the same character. Now check if it's mergeable.
-            if (!potentialNextLine.audioBlobId) {
-                return { canMerge: false, reason: "无法合并：下一个同角色的台词行没有音频。" };
-            }
-            return { canMerge: true, reason: "与下一行合并" };
-        }
+    const hasNextByChapter = selectedChapter.scriptLines
+        .slice(lineIndex + 1)
+        .some(line => line.audioBlobId && !nonAudioCharacterIds.includes(line.characterId || ''));
+
+    if (hasNextByChapter) {
+        return { canMerge: true, reason: "与后续音频合并" };
     }
     
-    // If loop completes without finding a match
-    return { canMerge: false, reason: "后面没有可合并的同角色台词行。" };
+    return { canMerge: false, reason: "后面没有可合并的台词行。" };
 
-  }, [playingLineInfo, selectedChapter, nonAudioCharacterIds]);
+  }, [playingLineInfo, selectedChapter, characters, nonAudioCharacterIds]);
 
 
   const hasAudioInChapter = useMemo(() => {
@@ -394,6 +392,14 @@ const AudioAlignmentPage: React.FC = () => {
                 className="hidden"
             />
             <button
+                onClick={() => setIsSilenceSettingsModalOpen(true)}
+                className="flex items-center text-sm text-sky-300 hover:text-sky-100 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md"
+                aria-label="间隔配置"
+            >
+                <CogIcon className="w-4 h-4 mr-1" />
+                间隔配置
+            </button>
+            <button
                 onClick={handleCvMatchClick}
                 disabled={isCvMatchLoading}
                 className="flex items-center text-sm text-sky-300 hover:text-sky-100 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50"
@@ -459,10 +465,11 @@ const AudioAlignmentPage: React.FC = () => {
                     <div>
                         <h3 className="text-xl font-bold text-sky-300 mb-4">{selectedChapter.title}</h3>
                         <div className="space-y-3">
-                            {visibleScriptLines.map(line => (
+                            {visibleScriptLines.map((line, index) => (
                                 <AudioScriptLine
                                     key={line.id}
                                     line={line}
+                                    nextLine={visibleScriptLines[index+1]}
                                     chapterId={selectedChapter.id}
                                     projectId={currentProject.id}
                                     character={characters.find(c => c.id === line.characterId)}
@@ -521,6 +528,13 @@ const AudioAlignmentPage: React.FC = () => {
         onConfirm={handleMergeConfirm}
         character={mergeModalInfo.character}
       />
+       {currentProject && (
+          <SilenceSettingsModal
+              isOpen={isSilenceSettingsModalOpen}
+              onClose={() => setIsSilenceSettingsModalOpen(false)}
+              project={currentProject}
+          />
+       )}
     </div>
   );
 };

@@ -375,7 +375,7 @@ const AudioAlignmentAssistantPage: React.FC = () => {
                 const relevantFiles = fileCoverage.get(chapterNum) || [];
                 const charIdsInChapter = new Set(chapter.scriptLines.map(l => l.characterId).filter((id): id is string => !!id));
 
-// FIX: Explicitly typed `charId` as `string` to resolve a TypeScript inference issue where it was being treated as 'unknown', which is not a valid index type.
+                // FIX: Explicitly typed `charId` as `string` to resolve a TypeScript inference issue where it was being treated as 'unknown', which is not a valid index type.
                 charIdsInChapter.forEach((charId: string) => {
                     const character = projectCharacters.find(c => c.id === charId);
                     if (!character) return;

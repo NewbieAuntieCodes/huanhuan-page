@@ -30,6 +30,8 @@ export interface EditorContextType {
   setSelectedLineForPlayback: React.Dispatch<React.SetStateAction<ScriptLine | null>>;
   focusedScriptLineId: string | null;
   setFocusedScriptLineId: React.Dispatch<React.SetStateAction<string | null>>;
+  shortcutActiveLineId: string | null;
+  setShortcutActiveLineId: React.Dispatch<React.SetStateAction<string | null>>;
   
   isLoadingAiAnnotation: boolean;
   isLoadingManualParse: boolean;
@@ -40,6 +42,7 @@ export interface EditorContextType {
   openAddChaptersModal: () => void;
   openScriptImport: () => void; // New function to trigger script import
   saveNewChapters: (pastedText: string) => void;
+  openShortcutSettingsModal: () => void;
 
   characterFilterMode: CharacterFilterMode;
   setCharacterFilterMode: React.Dispatch<React.SetStateAction<CharacterFilterMode>>;

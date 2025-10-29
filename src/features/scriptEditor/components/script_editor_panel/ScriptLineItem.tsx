@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ScriptLine, Character } from '../../../../types';
-import { UserCircleIcon, MagnifyingGlassIcon, ChevronDownIcon, XMarkIcon } from '../../../../components/ui/icons';
+import { UserCircleIcon, ChevronDownIcon, XMarkIcon } from '../../../../components/ui/icons';
 import { isHexColor, getContrastingTextColor } from '../../../../lib/colorUtils';
+import CharacterSelectorDropdown from './CharacterSelectorDropdown';
 
 interface ScriptLineItemProps {
   line: ScriptLine;
@@ -16,20 +17,12 @@ interface ScriptLineItemProps {
   isFocusedForSplit?: boolean; 
   onUpdateSoundType: (lineId: string, soundType: string) => void;
   onFocusChange: (lineId: string | null) => void; 
+  shortcutActiveLineId: string | null;
+  onActivateShortcutMode: (lineId: string | null) => void;
   customSoundTypes: string[];
   onAddCustomSoundType: (soundType: string) => void;
   onDeleteCustomSoundType: (soundType: string) => void;
 }
-
-const isDialogue = (text: string): boolean => {
-  const trimmedText = text.trim();
-  const dialogueQuotes = [
-    { start: '“', end: '”' }, // Chinese
-    { start: '"', end: '"' },  // English
-    { start: '「', end: '」' }, // Japanese
-  ];
-  return dialogueQuotes.some(q => trimmedText.startsWith(q.start) && trimmedText.endsWith(q.end));
-};
 
 const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   line,
@@ -39,10 +32,12 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   onAssignCharacter,
   onMergeLines,
   onDelete,
-  onOpenCvModalForCharacter, // Renamed from onOpenCvModalForCharacterLine for consistency
+  onOpenCvModalForCharacter,
   cvStyles,
   onUpdateSoundType,
   onFocusChange,
+  shortcutActiveLineId,
+  onActivateShortcutMode,
   customSoundTypes,
   onAddCustomSoundType,
   onDeleteCustomSoundType,
@@ -52,16 +47,13 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   const isSilentLine = character && character.name === '[静音]';
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [isSoundTypeDropdownOpen, setIsSoundTypeDropdownOpen] = useState(false);
   const soundTypeDropdownRef = useRef<HTMLDivElement>(null);
   
   const defaultSoundOptions = ['清除', 'OS', '电话音', '系统音', '广播'];
   const soundOptions = [...defaultSoundOptions, ...customSoundTypes, '自定义'];
-
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -74,49 +66,11 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
     };
     if (isDropdownOpen || isSoundTypeDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      if (isDropdownOpen) setTimeout(() => searchInputRef.current?.focus(), 0); 
-    } else {
-      setSearchTerm(''); // Reset search on close
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isDropdownOpen, isSoundTypeDropdownOpen]);
-
-  const { specialCharacters, chapterCharacters, otherCharacters } = useMemo(() => {
-    const specialNamesOrder = ['[静音]', '音效', 'narrator']; // lowercase
-    const specials: Character[] = [];
-    const chapterChars: Character[] = [];
-    const otherChars: Character[] = [];
-    const lowerSearchTerm = searchTerm.toLowerCase();
-
-    characters.forEach(c => {
-        const lowerName = c.name.toLowerCase();
-        
-        // Skip if search term is present and it doesn't match
-        if (searchTerm && !lowerName.includes(lowerSearchTerm)) {
-            return;
-        }
-
-        if (specialNamesOrder.includes(lowerName)) {
-            specials.push(c);
-        } else if (characterIdsInChapter.has(c.id)) {
-            chapterChars.push(c);
-        } else {
-            otherChars.push(c);
-        }
-    });
-
-    // Sort special characters according to the predefined order
-    specials.sort((a, b) => specialNamesOrder.indexOf(a.name.toLowerCase()) - specialNamesOrder.indexOf(b.name.toLowerCase()));
-
-    // Sort the alphabetical lists
-    chapterChars.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
-    otherChars.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
-    
-    return { specialCharacters: specials, chapterCharacters: chapterChars, otherCharacters: otherChars };
-  }, [characters, searchTerm, characterIdsInChapter]);
-
 
   const getCharacterSelectStyle = () => {
     if (isSilentLine) {
@@ -248,33 +202,6 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   
   const isLit = !!line.soundType && line.soundType !== '清除';
 
-  const renderCharacterOption = (c: Character) => {
-    const optionBgIsHex = isHexColor(c.color);
-    const optionTextIsHex = isHexColor(c.textColor || '');
-    const style = {
-      backgroundColor: optionBgIsHex ? c.color : undefined,
-      color: optionTextIsHex ? c.textColor : undefined,
-    };
-    const className = `w-full text-left px-3 py-2 text-sm cursor-pointer hover:opacity-80 ${
-      optionBgIsHex ? '' : c.color
-    } ${optionTextIsHex ? '' : c.textColor || 'text-slate-100'}`;
-
-    return (
-      <li
-        key={c.id}
-        role="option"
-        aria-selected={line.characterId === c.id}
-        onClick={() => {
-          onAssignCharacter(line.id, c.id);
-          setIsDropdownOpen(false);
-        }}
-        className={className}
-        style={style}
-      >
-        {c.name}
-      </li>
-    );
-  };
 
   const handleAddCustom = () => {
     const newSoundType = prompt("请输入新的音效类型:", "");
@@ -284,118 +211,68 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
     setIsSoundTypeDropdownOpen(false);
   };
 
+  const isShortcutActive = shortcutActiveLineId === line.id;
+
   return (
-    <div className={`p-3 mb-2 rounded-lg border flex items-center gap-3 transition-all duration-150 ${isSilentLine ? 'border-slate-800 opacity-70' : 'border-slate-700'} hover:border-slate-600 ${line.isAiAudioLoading ? 'opacity-70' : ''}`}>
+    <div className={`p-3 mb-2 rounded-lg border flex items-center gap-3 transition-all duration-150 ${isSilentLine ? 'border-slate-800 opacity-70' : 'border-slate-700'} hover:border-slate-600 ${line.isAiAudioLoading ? 'opacity-70' : ''} ${isShortcutActive ? 'ring-2 ring-amber-400' : ''}`}>
       
       <div className="flex-shrink-0 w-48 space-y-1">
         <div className="flex items-center space-x-1 w-full">
-          {character ? (
-            isSilentLine ? (
-                <span
-                    title="静音行"
-                    className="flex-shrink-0 flex items-center justify-center text-xs px-1.5 py-2 h-9 rounded truncate max-w-[80px] bg-slate-700/60 text-slate-500"
-                >
-                    <UserCircleIcon className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
-                    <span className="truncate">静音</span>
-                </span>
-            ) : (
-                <button
-                    onClick={() => onOpenCvModalForCharacter(character)}
-                    title={character.cvName ? `CV: ${character.cvName} (编辑CV与角色样式)` : `为角色 ${character.name} 添加CV并编辑样式`}
-                    className={`flex-shrink-0 flex items-center justify-center text-xs px-1.5 py-2 h-9 rounded truncate max-w-[80px] ${cvButtonAppliedStyle.className}`}
-                    style={cvButtonAppliedStyle.style}
-                    aria-label={`编辑角色 ${character.name} 的CV与样式`}
-                >
-                    <UserCircleIcon className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
-                    <span className="truncate">{cvButtonText}</span>
-                </button>
-            )
-          ) : (
-            <div className="w-[80px] h-9 flex-shrink-0"></div> 
-          )}
-          <div className="relative flex-grow min-w-[80px]" ref={dropdownRef}>
+          {character && !isSilentLine ? (
             <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className={`w-full p-2 text-sm text-left rounded-md border outline-none focus:ring-2 focus:ring-sky-500 h-9 flex items-center justify-between ${charSelectAppliedStyle.className} border-slate-600`}
-              style={charSelectAppliedStyle.style}
-              aria-haspopup="listbox"
-              aria-expanded={isDropdownOpen}
+                onClick={() => onOpenCvModalForCharacter(character)}
+                title={character.cvName ? `CV: ${character.cvName} (编辑CV与角色样式)` : `为角色 ${character.name} 添加CV并编辑样式`}
+                className={`flex-shrink-0 flex items-center justify-center text-xs px-1.5 py-2 h-9 rounded truncate w-20 ${cvButtonAppliedStyle.className}`}
+                style={cvButtonAppliedStyle.style}
+                aria-label={`编辑角色 ${character.name} 的CV与样式`}
             >
-              <span className="truncate">
-                {isCharacterMissing ? '待识别角色' : character?.name || '分配角色...'}
-              </span>
-               <svg className="w-4 h-4 text-current opacity-70 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
+                <UserCircleIcon className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
+                <span className="truncate">{cvButtonText}</span>
             </button>
+          ) : (
+            <div className="w-20 h-9 flex-shrink-0"></div> 
+          )}
+
+          <div className="relative flex-grow min-w-[80px]" ref={dropdownRef}>
+            <div className={`relative flex rounded-md border h-9 overflow-hidden ${isShortcutActive ? 'ring-2 ring-sky-400' : 'border-slate-600'}`}>
+                <button
+                    onClick={() => onActivateShortcutMode(line.id)}
+                    title="点击激活快捷键模式"
+                    className={`flex-grow p-2 text-sm text-left outline-none focus:z-10 flex items-center ${charSelectAppliedStyle.className}`}
+                    style={charSelectAppliedStyle.style}
+                >
+                    <span className="truncate">
+                        {isCharacterMissing ? '待识别角色' : character?.name || '分配角色...'}
+                    </span>
+                </button>
+                <button
+                    onClick={() => setIsDropdownOpen(prev => !prev)}
+                    title="打开角色选择菜单"
+                    className={`flex-shrink-0 px-1 outline-none focus:z-10 border-l border-black/20 ${charSelectAppliedStyle.className}`}
+                    style={charSelectAppliedStyle.style}
+                    aria-haspopup="listbox"
+                    aria-expanded={isDropdownOpen}
+                >
+                    <ChevronDownIcon className="w-4 h-4 text-current opacity-70" />
+                </button>
+            </div>
+
 
             {isDropdownOpen && (
-              <div className="absolute z-20 mt-1 w-full bg-slate-800 rounded-md shadow-lg border border-slate-600 max-h-96 flex flex-col">
-                <div className="p-2 sticky top-0 bg-slate-800 border-b border-slate-700 z-10">
-                  <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                          <MagnifyingGlassIcon className="h-4 w-4 text-slate-400" />
-                      </div>
-                      <input
-                          ref={searchInputRef}
-                          type="text"
-                          placeholder="搜索..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full p-1.5 pl-8 bg-slate-700 text-slate-100 rounded-md border border-slate-600 focus:ring-sky-500 focus:border-sky-500 text-sm"
-                      />
-                  </div>
-                </div>
-                <ul role="listbox" className="overflow-y-auto">
-                  {character && !isSilentLine && (
-                    <li
-                      role="option"
-                      onClick={() => { onMergeLines(line.id); setIsDropdownOpen(false); }}
-                      className="px-3 py-2 text-sm text-indigo-200 bg-indigo-600 hover:bg-indigo-500 cursor-pointer font-semibold sticky top-0 z-10"
-                    >
-                      [合并相邻同角色行]
-                    </li>
-                  )}
-                  {specialCharacters.map(renderCharacterOption)}
-
-                  {(specialCharacters.length > 0 && (chapterCharacters.length > 0 || otherCharacters.length > 0)) && (
-                    <li role="separator"><hr className="my-1 border-slate-600" /></li>
-                  )}
-
-                  {chapterCharacters.length > 0 && (
-                    <>
-                      <li role="separator" className="px-3 py-1 text-xs text-slate-400 font-semibold sticky top-0 bg-slate-800 z-10">
-                        本章角色
-                      </li>
-                      {chapterCharacters.map(renderCharacterOption)}
-                    </>
-                  )}
-
-                  {chapterCharacters.length > 0 && otherCharacters.length > 0 && (
-                    <li role="separator"><hr className="my-1 border-slate-600" /></li>
-                  )}
-
-                  {otherCharacters.length > 0 && (
-                    <>
-                      <li role="separator" className="px-3 py-1 text-xs text-slate-400 font-semibold sticky top-0 bg-slate-800 z-10">
-                        其他角色
-                      </li>
-                      {otherCharacters.map(renderCharacterOption)}
-                    </>
-                  )}
-
-                  {(chapterCharacters.length > 0 || otherCharacters.length > 0 || specialCharacters.length > 0) && (
-                    <li role="separator"><hr className="my-1 border-slate-600" /></li>
-                  )}
-                  <li
-                    role="option"
-                    onClick={() => { onAssignCharacter(line.id, ''); setIsDropdownOpen(false); }}
-                    className="px-3 py-2 text-sm text-slate-300 hover:bg-slate-600 cursor-pointer"
-                  >
-                    [取消分配]
-                  </li>
-                </ul>
-              </div>
+              <CharacterSelectorDropdown
+                characters={characters}
+                characterIdsInChapter={characterIdsInChapter}
+                currentLineCharacterId={line.characterId}
+                onSelectCharacter={(charId) => {
+                    onAssignCharacter(line.id, charId);
+                    setIsDropdownOpen(false);
+                }}
+                onMergeLines={() => {
+                    onMergeLines(line.id);
+                    setIsDropdownOpen(false);
+                }}
+                onClose={() => setIsDropdownOpen(false)}
+              />
             )}
           </div>
         </div>

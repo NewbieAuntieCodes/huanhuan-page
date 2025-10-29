@@ -16,7 +16,9 @@ export const exportMarkedWav = async (
     rows: VoiceLibraryRowState[],
     project: Project,
     character: Character,
-    generatedAudioUrls: Record<string, string>
+    generatedAudioUrls: Record<string, string>,
+    // FIX: Add `allProjectCharacters` to satisfy the updated signature of `exportAudioWithMarkers`.
+    allProjectCharacters: Character[]
 ): Promise<void> => {
     const rowsToExport = rows.filter(r => generatedAudioUrls[r.id] && r.originalLineId);
     if (rowsToExport.length === 0) {
@@ -47,7 +49,8 @@ export const exportMarkedWav = async (
         return;
     }
 
-    const waveBlob = await exportAudioWithMarkers(linesWithAudio);
+    // FIX: Pass all required arguments (`project` and `allProjectCharacters`) to `exportAudioWithMarkers`.
+    const waveBlob = await exportAudioWithMarkers(linesWithAudio, project, allProjectCharacters);
     const url = URL.createObjectURL(waveBlob);
     const a = document.createElement('a');
     a.href = url;

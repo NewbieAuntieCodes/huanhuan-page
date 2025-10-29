@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Chapter, ScriptLine, Character } from '../../../../types';
 import ScriptLineItem from './ScriptLineItem';
 import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
-import { SplitIcon, UndoIcon, RedoIcon, PencilIcon, SaveIcon, ScissorsIcon } from '../../../../components/ui/icons'; 
+import { SplitIcon, UndoIcon, RedoIcon, PencilIcon, SaveIcon, ScissorsIcon, KeyboardIcon } from '../../../../components/ui/icons'; 
 // FIX: Corrected import path for EditorContext
 import { useEditorContext } from '../../contexts/EditorContext';
 
@@ -42,6 +42,9 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
     selectedChapterId,
     focusedScriptLineId,
     setFocusedScriptLineId,
+    shortcutActiveLineId,
+    setShortcutActiveLineId,
+    openShortcutSettingsModal,
     isLoadingAiAnnotation, // From context, for chapter processing
     isLoadingManualParse,  // From context, for chapter processing
     addCustomSoundType,
@@ -200,6 +203,15 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
           </div>
         )}
         <div className="flex items-center space-x-2 flex-shrink-0">
+           <button
+            onClick={openShortcutSettingsModal}
+            disabled={isEditingHeaderTitle}
+            title="快捷键设置"
+            className="flex items-center px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <KeyboardIcon className="w-4 h-4 mr-1.5" />
+            快捷键
+          </button>
           <button
             onClick={undo}
             disabled={!canUndo || isEditingHeaderTitle}
@@ -264,6 +276,8 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               isFocusedForSplit={focusedScriptLineId === line.id} // From context
               onUpdateSoundType={(lineId, soundType) => onUpdateSoundType(selectedChapter.id, lineId, soundType)}
               onFocusChange={setFocusedScriptLineId} // From context
+              shortcutActiveLineId={shortcutActiveLineId}
+              onActivateShortcutMode={setShortcutActiveLineId}
               customSoundTypes={currentProject?.customSoundTypes || []}
               onAddCustomSoundType={addCustomSoundType}
               onDeleteCustomSoundType={deleteCustomSoundType}

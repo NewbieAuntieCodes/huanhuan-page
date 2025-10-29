@@ -51,6 +51,7 @@ export const useStore = create<AppState>((set, get, api) => ({
         characterColorPresetsItem,
         apiSettingsItem,
         selectedAiProviderItem,
+        characterShortcutsItem,
       ] = await db.transaction('r', db.projects, db.characters, db.misc, async () => {
         return Promise.all([
           db.projects.orderBy('lastModified').reverse().toArray(),
@@ -60,6 +61,7 @@ export const useStore = create<AppState>((set, get, api) => ({
           db.misc.get('characterColorPresets'),
           db.misc.get('apiSettings'),
           db.misc.get('selectedAiProvider'),
+          db.misc.get('characterShortcuts'),
         ]);
       });
 
@@ -67,6 +69,7 @@ export const useStore = create<AppState>((set, get, api) => ({
       const mergeHistory = mergeHistoryItem?.value || [];
       const apiSettings = apiSettingsItem?.value || get().apiSettings;
       const selectedAiProvider = selectedAiProviderItem?.value || 'gemini';
+      const characterShortcuts = characterShortcutsItem?.value || {};
       
       let cvColorPresets = cvColorPresetsItem?.value;
       if (!cvColorPresets || !Array.isArray(cvColorPresets) || cvColorPresets.length === 0) {
@@ -127,6 +130,7 @@ export const useStore = create<AppState>((set, get, api) => ({
         characterColorPresets,
         apiSettings,
         selectedAiProvider,
+        characterShortcuts,
         currentView: initialView,
         aiProcessingChapterIds: [], // Reset on load
         selectedProjectId: get().selectedProjectId || null,

@@ -30,6 +30,9 @@ export interface ScriptLine {
   isAiAudioSynced: boolean; // True if current text matches generated/assigned audio
   isTextModifiedManual: boolean; // True if user manually edited text after initial load/AI annotation
   soundType?: string; // Off-screen / Off-stage sound type (e.g., 'OS', '电话音')
+  isMarkedForReturn?: boolean;
+  feedback?: string;
+  postSilence?: number; // Override for silence after this line, in seconds
 }
 
 export interface Chapter {
@@ -41,6 +44,16 @@ export interface Chapter {
 
 export type ProjectStatus = "in-progress" | "completed";
 export type MainCategory = string; // Changed from "male" | "female" | "custom"
+
+export type LineType = 'narration' | 'dialogue' | 'sfx';
+
+export type SilencePairing = `${LineType}-to-${LineType}`;
+
+export interface SilenceSettings {
+  startPadding: number;
+  endPadding: number;
+  pairs: Record<SilencePairing, number>;
+}
 
 export interface Project {
   id: string;
@@ -55,6 +68,7 @@ export interface Project {
   cvStyles?: CVStylesMap;
   customSoundTypes?: string[];
   lastViewedChapterId?: string;
+  silenceSettings?: SilenceSettings;
 }
 
 // For Gemini service response parsing

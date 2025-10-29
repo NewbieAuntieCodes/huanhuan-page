@@ -1,9 +1,10 @@
 import { StateCreator } from 'zustand';
 import { AppState } from '../useStore';
-import { Project, Collaborator, Chapter, AudioBlob, ScriptLine, Character } from '../../types';
+import { Project, Collaborator, Chapter, AudioBlob, ScriptLine, Character, SilenceSettings } from '../../types';
 import { db } from '../../db';
 import { splitAudio, mergeAudio } from '../../lib/audioProcessing';
 import { calculateShiftChain, ShiftMode } from '../../lib/shiftChainUtils';
+import { defaultSilenceSettings } from '../../lib/defaultSilenceSettings';
 
 const defaultCharConfigs = [
   { name: '[静音]', color: 'bg-slate-700', textColor: 'text-slate-400', description: '用于标记无需录制的旁白提示' },
@@ -29,6 +30,10 @@ export interface ProjectSlice {
   addCustomSoundType: (projectId: string, soundType: string) => Promise<void>;
   deleteCustomSoundType: (projectId: string, soundType: string) => Promise<void>;
   batchAddChapters: (projectId: string, count: number) => Promise<void>;
+  toggleLineReturnMark: (projectId: string, chapterId: string, lineId: string) => Promise<void>;
+  updateLineFeedback: (projectId: string, chapterId: string, lineId: string, feedback: string) => Promise<void>;
+  updateProjectSilenceSettings: (projectId: string, settings: SilenceSettings) => Promise<void>;
+  updateLinePostSilence: (projectId: string, chapterId: string, lineId: string, silence?: number) => Promise<void>;
 }
 
 export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = (set, get, _api) => ({
@@ -40,6 +45,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         'pb': { bgColor: 'bg-slate-700', textColor: 'text-slate-300' } // Add default style for 'pb'
       },
       customSoundTypes: [],
+      silenceSettings: defaultSilenceSettings,
     };
     
     // Create project-specific default characters
@@ -425,24 +431,35 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     if (currentLineIndex < 0) return;
     const currentLine = chapter.scriptLines[currentLineIndex];
 
-    // Find the next line with the same character ID
     let nextLine: ScriptLine | null = null;
     let nextLineIndex: number = -1;
+    const allCharacters = get().characters;
+    const startChar = allCharacters.find(c => c.id === currentLine.characterId);
+    const silentAndEffectCharIds = new Set(allCharacters.filter(c => c.name === '[静音]' || c.name === '音效').map(c => c.id));
+
     for (let i = currentLineIndex + 1; i < chapter.scriptLines.length; i++) {
         const potentialNextLine = chapter.scriptLines[i];
-        if (potentialNextLine.characterId === currentLine.characterId) {
+        if (!potentialNextLine.audioBlobId || silentAndEffectCharIds.has(potentialNextLine.characterId || '')) continue;
+
+        let isMatch = false;
+        if (shiftMode === 'chapter') {
+            isMatch = true;
+        } else if (shiftMode === 'character' && startChar) {
+            isMatch = potentialNextLine.characterId === startChar.id;
+        } else if (shiftMode === 'cv' && startChar?.cvName) {
+            const potentialChar = allCharacters.find(c => c.id === potentialNextLine.characterId);
+            isMatch = !!potentialChar && !!potentialChar.cvName && potentialChar.cvName === startChar.cvName;
+        }
+        
+        if (isMatch) {
             nextLine = potentialNextLine;
             nextLineIndex = i;
             break;
         }
     }
 
-    if (!nextLine || nextLineIndex === -1) {
-        alert("无法合并：找不到下一个属于该角色的台词行。");
-        return;
-    }
-    if (!currentLine.audioBlobId || !nextLine.audioBlobId) {
-        alert("无法合并：其中一句台词没有音频。");
+    if (!nextLine || !currentLine.audioBlobId || !nextLine.audioBlobId) {
+        alert("无法合并：找不到符合条件的下一句带音频的台词。");
         return;
     }
 
@@ -462,48 +479,35 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         const newBlobEntry: AudioBlob = { id: mergedBlobId, lineId: currentLine.id, data: mergedBlob };
         const blobsToDelete = [currentLine.audioBlobId, nextLine.audioBlobId];
 
-        const newScriptLines = [...chapter.scriptLines];
-        
-        // Update the current line with merged text and audio
-        newScriptLines[currentLineIndex] = {
-            ...currentLine,
-            text: `${currentLine.text}\n${nextLine.text}`,
-            audioBlobId: mergedBlobId,
-        };
-        
-        // The line that was merged FROM is now the starting point for the shift-up operation
-        const lineToStartShiftFrom = newScriptLines[nextLineIndex];
-        
-        // Calculate the chain starting from the line *after* the one we're taking audio from
         const shiftChain = calculateShiftChain(chapter.scriptLines, nextLineIndex + 1, shiftMode, get().characters, currentLine.characterId);
 
-        // Perform the shift up, starting at the now-vacated nextLine's position
-        let previousAudioId = lineToStartShiftFrom.audioBlobId; // This is the audio ID of the line we are removing
+        const newScriptLines = [...chapter.scriptLines];
         
-        newScriptLines[nextLineIndex] = { ...lineToStartShiftFrom, audioBlobId: shiftChain.length > 0 ? shiftChain[0].line.audioBlobId : undefined };
+        // 1. Update current line with merged audio. DO NOT CHANGE TEXT.
+        newScriptLines[currentLineIndex] = { ...currentLine, audioBlobId: mergedBlobId };
 
-        for(let i=0; i < shiftChain.length -1; i++){
+        // 2. The line we merged FROM gets the audio of the first item in the chain.
+        const firstShiftedAudioId = shiftChain.length > 0 ? shiftChain[0].line.audioBlobId : undefined;
+        newScriptLines[nextLineIndex] = { ...nextLine, audioBlobId: firstShiftedAudioId };
+
+        // 3. Shift audio up for the rest of the chain
+        for (let i = 0; i < shiftChain.length - 1; i++) {
             const currentInChain = shiftChain[i];
-            const nextInChain = shiftChain[i+1];
+            const nextInChain = shiftChain[i + 1];
             newScriptLines[currentInChain.index] = { ...currentInChain.line, audioBlobId: nextInChain.line.audioBlobId };
         }
 
-        if(shiftChain.length > 0){
+        // 4. Last item in chain becomes empty
+        if (shiftChain.length > 0) {
             const lastInChain = shiftChain[shiftChain.length - 1];
             newScriptLines[lastInChain.index] = { ...lastInChain.line, audioBlobId: undefined };
-            if (lastInChain.line.audioBlobId) {
-                blobsToDelete.push(lastInChain.line.audioBlobId);
-            }
         }
         
-        // Remove the line that was merged from the script
-        const finalScriptLines = newScriptLines.filter(line => line.id !== nextLine!.id);
-
-        const updatedChapter = { ...chapter, scriptLines: finalScriptLines };
+        const updatedChapter = { ...chapter, scriptLines: newScriptLines };
         const updatedProject = { ...project, chapters: project.chapters.map(c => c.id === chapterId ? updatedChapter : c), lastModified: Date.now() };
 
         await db.transaction('rw', db.projects, db.audioBlobs, async () => {
-            await db.audioBlobs.bulkDelete([...new Set(blobsToDelete)]);
+            await db.audioBlobs.bulkDelete(blobsToDelete);
             await db.audioBlobs.put(newBlobEntry);
             await db.projects.put(updatedProject);
         });
@@ -511,7 +515,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         set({ projects: state.projects.map(p => p.id === projectId ? updatedProject : p) });
 
     } catch (e) {
-        console.error("Failed to merge audio:", e);
+        console.error("Failed to merge and shift audio:", e);
         alert(`合并音频失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   },
@@ -608,5 +612,98 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     set({
         projects: state.projects.map(p => p.id === projectId ? updatedProject : p)
     });
+  },
+  toggleLineReturnMark: async (projectId, chapterId, lineId) => {
+    const project = get().projects.find(p => p.id === projectId);
+    if (!project) return;
+    
+    const updatedProject = {
+      ...project,
+      chapters: project.chapters.map(ch => {
+        if (ch.id === chapterId) {
+          return {
+            ...ch,
+            scriptLines: ch.scriptLines.map(line => {
+              if (line.id === lineId) {
+                return { ...line, isMarkedForReturn: !line.isMarkedForReturn };
+              }
+              return line;
+            })
+          };
+        }
+        return ch;
+      }),
+      lastModified: Date.now(),
+    };
+    
+    await db.projects.put(updatedProject);
+    set(state => ({
+      projects: state.projects.map(p => p.id === projectId ? updatedProject : p)
+    }));
+  },
+  updateLineFeedback: async (projectId, chapterId, lineId, feedback) => {
+    const project = get().projects.find(p => p.id === projectId);
+    if (!project) return;
+    
+    const updatedProject = {
+      ...project,
+      chapters: project.chapters.map(ch => {
+        if (ch.id === chapterId) {
+          return {
+            ...ch,
+            scriptLines: ch.scriptLines.map(line => {
+              if (line.id === lineId) {
+                return { ...line, feedback: feedback };
+              }
+              return line;
+            })
+          };
+        }
+        return ch;
+      }),
+      lastModified: Date.now(),
+    };
+    
+    await db.projects.put(updatedProject);
+    set(state => ({
+      projects: state.projects.map(p => p.id === projectId ? updatedProject : p)
+    }));
+  },
+  updateProjectSilenceSettings: async (projectId, settings) => {
+    const project = get().projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const updatedProject = { ...project, silenceSettings: settings, lastModified: Date.now() };
+    await db.projects.put(updatedProject);
+    set(state => ({
+        projects: state.projects.map(p => p.id === projectId ? updatedProject : p),
+    }));
+  },
+  updateLinePostSilence: async (projectId, chapterId, lineId, silence) => {
+    const project = get().projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const updatedProject = {
+        ...project,
+        chapters: project.chapters.map(ch => {
+            if (ch.id === chapterId) {
+                return {
+                    ...ch,
+                    scriptLines: ch.scriptLines.map(line => {
+                        if (line.id === lineId) {
+                            return { ...line, postSilence: silence === undefined ? undefined : Number(silence) };
+                        }
+                        return line;
+                    })
+                };
+            }
+            return ch;
+        }),
+        lastModified: Date.now(),
+    };
+    await db.projects.put(updatedProject);
+    set(state => ({
+        projects: state.projects.map(p => p.id === projectId ? updatedProject : p),
+    }));
   },
 });

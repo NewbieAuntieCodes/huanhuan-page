@@ -374,7 +374,8 @@ export const useVoiceLibrary = () => {
         if (!currentProject || !selectedCharacter) return;
         setIsExporting(true);
         try {
-            await exportMarkedWav(rows, currentProject, selectedCharacter, generatedAudioUrls);
+            // FIX: Pass `charactersInProject` to `exportMarkedWav` to satisfy its updated signature.
+            await exportMarkedWav(rows, currentProject, selectedCharacter, generatedAudioUrls, charactersInProject);
         } catch (error) {
             alert(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
         } finally {

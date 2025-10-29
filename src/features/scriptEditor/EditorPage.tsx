@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { Project, Character, ScriptLine, Chapter } from '../../types';
 import { CVStylesMap } from '../../types';
 import mammoth from 'mammoth';
@@ -11,6 +11,8 @@ import { ControlsAndCharactersPanel } from './components/character_panel/Control
 import CharacterDetailsSidePanel from './components/character_side_panel/CharacterDetailsSidePanel';
 import ImportAnnotationModal from './components/editor_page_modal/ImportAnnotationModal';
 import AddChaptersModal from './components/chapter_list_panel/AddChaptersModal';
+import ShortcutSettingsModal from './components/editor_page_modal/ShortcutSettingsModal';
+
 
 // Hooks
 import { useEnhancedEditorCoreLogic } from './hooks/useEnhancedEditorCoreLogic';
@@ -74,6 +76,11 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
   } = coreLogic;
   
   const scriptImportInputRef = useRef<HTMLInputElement>(null);
+  const [shortcutActiveLineId, setShortcutActiveLineId] = useState<string | null>(null);
+  const isShortcutSettingsModalOpen = useStore(state => state.isShortcutSettingsModalOpen);
+  const openShortcutSettingsModal = useStore(state => state.openShortcutSettingsModal);
+  const closeShortcutSettingsModal = useStore(state => state.closeShortcutSettingsModal);
+
 
   const { projectCharacters, allCvNames, cvStyles } = useMemo(() => {
     const projChars = characters.filter(c => !c.projectId || c.projectId === projectId);
@@ -163,6 +170,30 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     applyUndoableProjectUpdate,
     selectedChapterId
   );
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!shortcutActiveLineId || isShortcutSettingsModalOpen) return;
+  
+      const key = e.key.toLowerCase();
+      const shortcuts = useStore.getState().characterShortcuts;
+  
+      if (shortcuts && shortcuts[key] !== undefined) {
+        const characterId = shortcuts[key];
+        const project = useStore.getState().projects.find(p => p.id === projectId);
+        const chapter = project?.chapters.find(ch => ch.scriptLines.some(l => l.id === shortcutActiveLineId));
+        if (chapter) {
+          handleAssignCharacterToLine(chapter.id, shortcutActiveLineId, characterId);
+        }
+        e.preventDefault();
+      }
+      setShortcutActiveLineId(null);
+    };
+  
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  
+  }, [shortcutActiveLineId, handleAssignCharacterToLine, projectId, isShortcutSettingsModalOpen]);
 
   const {
     characterForSidePanel,
@@ -227,13 +258,12 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
             }
         } catch (error) {
             console.error("读取或解析文件时出错:", error);
-            let errorMessage = "读取或解析文件时出错: 未知错误";
-            if (error instanceof Error) {
-                errorMessage = `读取或解析文件时出错: ${error.message}`;
-                // FIX: The type of `error.message` was not being correctly inferred as a string. Added a `typeof` check to explicitly narrow the type and ensure `toLowerCase` can be called safely.
-                if (typeof error.message === 'string' && error.message.toLowerCase().includes('central directory')) {
-                    errorMessage = '无法读取该 .docx 文件。文件可能已损坏，或者它是一个旧版 .doc 文件但扩展名被错误地改成了 .docx。请尝试在Word中打开并重新另存为 .docx 格式。';
-                }
+            // FIX: The 'error' object in a catch block is of type 'unknown'. This ensures it is safely converted to a string before calling string methods.
+            const detailedMessage = error instanceof Error ? error.message : String(error);
+            let errorMessage = `读取或解析文件时出错: ${detailedMessage}`;
+
+            if (detailedMessage.toLowerCase().includes('central directory')) {
+                errorMessage = '无法读取该 .docx 文件。文件可能已损坏，或者它是一个旧版 .doc 文件但扩展名被错误地改成了 .docx。请尝试在Word中打开并重新另存为 .docx 格式。';
             }
             alert(errorMessage);
             return;
@@ -420,6 +450,9 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     openCharacterSidePanel: handleOpenCharacterSidePanel,
     openCvModal: onOpenCharacterAndCvStyleModal,
     openCharacterEditModal: onOpenCharacterAndCvStyleModal,
+    openShortcutSettingsModal: openShortcutSettingsModal,
+    shortcutActiveLineId,
+    setShortcutActiveLineId,
     cvFilter: coreLogic.cvFilter,
     setCvFilter: coreLogic.setCvFilter,
     addCustomSoundType: handleAddCustomSoundType,
@@ -429,6 +462,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     isLoadingAiAnnotation, isLoadingManualParse, isLoadingImportAnnotation,
     handleRunAiAnnotationForChapters, handleManualParseChapters, handleOpenImportModalTrigger,
     handleOpenCharacterSidePanel, onOpenCharacterAndCvStyleModal, handleOpenScriptImport,
+    openShortcutSettingsModal, shortcutActiveLineId,
     handleAddCustomSoundType, handleDeleteCustomSoundType
   ]);
 
@@ -490,6 +524,12 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
           isOpen={isAddChaptersModalOpen}
           onClose={() => setIsAddChaptersModalOpen(false)}
           onSave={handleSaveNewChapters}
+        />
+        <ShortcutSettingsModal
+          isOpen={isShortcutSettingsModalOpen}
+          onClose={closeShortcutSettingsModal}
+          allCharacters={characters}
+          characterIdsInChapter={new Set()}
         />
       </div>
     </EditorContext.Provider>

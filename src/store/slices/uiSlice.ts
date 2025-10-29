@@ -46,8 +46,10 @@ export interface UiSlice {
     characterToEdit: Character | null;
   };
   isSettingsModalOpen: boolean;
+  isShortcutSettingsModalOpen: boolean;
   apiSettings: ApiSettings;
   selectedAiProvider: AiProvider;
+  characterShortcuts: Record<string, string>; // key: keyboard key, value: characterId
 
 
   navigateTo: (view: AppView) => void;
@@ -71,8 +73,11 @@ export interface UiSlice {
   closeCharacterAndCvStyleModal: () => void;
   openSettingsModal: () => void;
   closeSettingsModal: () => void;
+  openShortcutSettingsModal: () => void;
+  closeShortcutSettingsModal: () => void;
   setApiSettings: (settings: ApiSettings) => Promise<void>;
   setSelectedAiProvider: (provider: AiProvider) => Promise<void>;
+  setCharacterShortcuts: (shortcuts: Record<string, string>) => Promise<void>;
 }
 
 export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set, get) => ({
@@ -85,6 +90,7 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set, get)
   confirmModal: confirmModalInitState,
   characterAndCvStyleModal: { isOpen: false, characterToEdit: null },
   isSettingsModalOpen: false,
+  isShortcutSettingsModalOpen: false,
   apiSettings: {
     gemini: { apiKey: '' },
     openai: { apiKey: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4-turbo' },
@@ -92,6 +98,7 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set, get)
     deepseek: { apiKey: '', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
   },
   selectedAiProvider: 'gemini',
+  characterShortcuts: {},
 
   navigateTo: (view) => set({ currentView: view }),
   setIsLoading: (loading) => set({ isLoading: loading }),
@@ -160,6 +167,8 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set, get)
   closeCharacterAndCvStyleModal: () => set({ characterAndCvStyleModal: { isOpen: false, characterToEdit: null } }),
   openSettingsModal: () => set({ isSettingsModalOpen: true }),
   closeSettingsModal: () => set({ isSettingsModalOpen: false }),
+  openShortcutSettingsModal: () => set({ isShortcutSettingsModalOpen: true }),
+  closeShortcutSettingsModal: () => set({ isShortcutSettingsModalOpen: false }),
   setApiSettings: async (settings) => {
     await db.misc.put({ key: 'apiSettings', value: settings });
     set({ apiSettings: settings });
@@ -167,5 +176,9 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set, get)
   setSelectedAiProvider: async (provider) => {
     await db.misc.put({ key: 'selectedAiProvider', value: provider });
     set({ selectedAiProvider: provider });
+  },
+  setCharacterShortcuts: async (shortcuts) => {
+    await db.misc.put({ key: 'characterShortcuts', value: shortcuts });
+    set({ characterShortcuts: shortcuts });
   },
 });

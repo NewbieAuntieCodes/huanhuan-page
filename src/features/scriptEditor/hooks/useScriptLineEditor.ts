@@ -1,4 +1,5 @@
 
+
 import { useCallback } from 'react';
 import { Project, Character, ScriptLine } from '../../../types';
 
@@ -110,7 +111,7 @@ export const useScriptLineEditor = (
                 const combinedText = linesToProcess.map((line, index) => {
                     if ((firstIndex + index) === lineIndex) return textToMerge;
                     return line.text;
-                }).join('\n');
+                }).join('');
 
                 const mergedLine: ScriptLine = {
                     ...chapter.scriptLines[firstIndex],
