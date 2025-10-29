@@ -26,6 +26,8 @@ export interface ProjectSlice {
   shiftAudioDown: (projectId: string, chapterId: string, startLineId: string, shiftMode: ShiftMode) => Promise<void>;
   shiftAudioUp: (projectId: string, chapterId: string, startLineId: string, shiftMode: ShiftMode) => Promise<void>;
   mergeWithNextAndShift: (projectId: string, chapterId: string, currentLineId: string, shiftMode: ShiftMode) => Promise<void>;
+  addCustomSoundType: (projectId: string, soundType: string) => Promise<void>;
+  deleteCustomSoundType: (projectId: string, soundType: string) => Promise<void>;
 }
 
 export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = (set, get, _api) => ({
@@ -35,7 +37,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       ...newProject, 
       cvStyles: {
         'pb': { bgColor: 'bg-slate-700', textColor: 'text-slate-300' } // Add default style for 'pb'
-      } 
+      },
+      customSoundTypes: [],
     };
     
     // Create project-specific default characters
@@ -510,5 +513,50 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         console.error("Failed to merge audio:", e);
         alert(`合并音频失败: ${e instanceof Error ? e.message : String(e)}`);
     }
+  },
+  addCustomSoundType: async (projectId, soundType) => {
+    const state = get();
+    const project = state.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const trimmedSoundType = soundType.trim();
+    if (!trimmedSoundType || (project.customSoundTypes || []).includes(trimmedSoundType)) {
+      return;
+    }
+
+    const updatedProject = {
+      ...project,
+      customSoundTypes: [...(project.customSoundTypes || []), trimmedSoundType],
+      lastModified: Date.now(),
+    };
+
+    await db.projects.put(updatedProject);
+    set({
+      projects: state.projects.map(p => p.id === projectId ? updatedProject : p)
+        .sort((a,b) => b.lastModified - a.lastModified),
+    });
+  },
+  deleteCustomSoundType: async (projectId, soundTypeToDelete) => {
+    const state = get();
+    const project = state.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const updatedProject = {
+      ...project,
+      customSoundTypes: (project.customSoundTypes || []).filter(st => st !== soundTypeToDelete),
+      chapters: project.chapters.map(ch => ({
+        ...ch,
+        scriptLines: ch.scriptLines.map(line => 
+          line.soundType === soundTypeToDelete ? { ...line, soundType: '' } : line
+        )
+      })),
+      lastModified: Date.now(),
+    };
+
+    await db.projects.put(updatedProject);
+    set({
+      projects: state.projects.map(p => p.id === projectId ? updatedProject : p)
+        .sort((a,b) => b.lastModified - a.lastModified),
+    });
   },
 });

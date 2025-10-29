@@ -63,13 +63,12 @@ export const useScriptLineEditor = (
             const isOriginallyCharacter = originalCharacter && originalCharacter.name !== 'Narrator';
             if (isOriginallyCharacter) {
                  const trimmedText = convertedText.trim();
-                 // If it's quoted, unquote it.
+                 // If it's quoted, change to single quotes.
                  if (trimmedText.startsWith('“') && trimmedText.endsWith('”')) {
                     const content = trimmedText.substring(1, trimmedText.length - 1);
-                    // This is safer than .replace() if content is repeated
                     const before = convertedText.substring(0, convertedText.indexOf(trimmedText));
                     const after = convertedText.substring(convertedText.indexOf(trimmedText) + trimmedText.length);
-                    convertedText = before + content + after;
+                    convertedText = before + `‘${content}’` + after;
                 }
             }
 
@@ -109,9 +108,21 @@ export const useScriptLineEditor = (
             
             if (isOriginallyNarrator) {
                 const trimmedText = newText.trim();
-                // If it's not already a dialogue line, wrap it in quotes.
-                if (trimmedText && !trimmedText.startsWith('“') && !trimmedText.startsWith('「')) {
-                    newText = `“${newText}”`;
+                const isAlreadyDialogue = (trimmedText.startsWith('“') && trimmedText.endsWith('”')) || (trimmedText.startsWith('「') && trimmedText.endsWith('」'));
+
+                if (!isAlreadyDialogue) {
+                    let content = trimmedText;
+                    // If it's single-quoted from a previous conversion, unwrap it
+                    if (content.startsWith('‘') && content.endsWith('’')) {
+                        content = content.substring(1, content.length - 1);
+                    }
+                    
+                    // Preserve any original whitespace around the content
+                    const before = newText.substring(0, newText.indexOf(trimmedText));
+                    const after = newText.substring(newText.indexOf(trimmedText) + trimmedText.length);
+                    
+                    // Re-wrap with standard double quotes
+                    newText = `${before}“${content}”${after}`;
                 }
             }
             

@@ -48,5 +48,13 @@ db.version(3).stores({
   assistantState: 'projectId', // Keyed by project ID
 });
 
+db.version(4).stores({
+  projects: 'id, lastModified',
+  characters: 'id, projectId',
+  misc: 'key',
+  audioBlobs: 'id, lineId',
+  assistantState: 'projectId',
+});
+
 
 export { db };

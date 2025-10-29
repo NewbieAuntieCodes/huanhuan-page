@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ScriptLine, Character } from '../../../../types';
-import { UserCircleIcon, MagnifyingGlassIcon, ChevronDownIcon } from '../../../../components/ui/icons';
+import { UserCircleIcon, MagnifyingGlassIcon, ChevronDownIcon, XMarkIcon } from '../../../../components/ui/icons';
 import { isHexColor, getContrastingTextColor } from '../../../../lib/colorUtils';
 
 interface ScriptLineItemProps {
@@ -16,6 +16,9 @@ interface ScriptLineItemProps {
   isFocusedForSplit?: boolean; 
   onUpdateSoundType: (lineId: string, soundType: string) => void;
   onFocusChange: (lineId: string | null) => void; 
+  customSoundTypes: string[];
+  onAddCustomSoundType: (soundType: string) => void;
+  onDeleteCustomSoundType: (soundType: string) => void;
 }
 
 const isDialogue = (text: string): boolean => {
@@ -40,6 +43,9 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
   cvStyles,
   onUpdateSoundType,
   onFocusChange,
+  customSoundTypes,
+  onAddCustomSoundType,
+  onDeleteCustomSoundType,
 }) => {
   const character = characters.find(c => c.id === line.characterId);
   const isCharacterMissing = line.characterId && !character;
@@ -52,7 +58,10 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
 
   const [isSoundTypeDropdownOpen, setIsSoundTypeDropdownOpen] = useState(false);
   const soundTypeDropdownRef = useRef<HTMLDivElement>(null);
-  const soundOptions = ['清除', 'OS', '电话音', '系统音', '新闻', '电视', '广播', '自定义'];
+  
+  const defaultSoundOptions = ['清除', 'OS', '电话音', '系统音', '广播'];
+  const soundOptions = [...defaultSoundOptions, ...customSoundTypes, '自定义'];
+
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -254,6 +263,14 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
     );
   };
 
+  const handleAddCustom = () => {
+    const newSoundType = prompt("请输入新的音效类型:", "");
+    if (newSoundType && newSoundType.trim() !== '') {
+      onAddCustomSoundType(newSoundType.trim());
+    }
+    setIsSoundTypeDropdownOpen(false);
+  };
+
   return (
     <div className={`p-3 mb-2 rounded-lg border flex items-center gap-3 transition-all duration-150 ${isSilentLine ? 'border-slate-800 opacity-70' : 'border-slate-700'} hover:border-slate-600 ${line.isAiAudioLoading ? 'opacity-70' : ''}`}>
       
@@ -392,21 +409,44 @@ const ScriptLineItem: React.FC<ScriptLineItemProps> = ({
         {isSoundTypeDropdownOpen && (
           <div className="absolute z-20 mt-1 w-full bg-slate-800 rounded-md shadow-lg border border-slate-600 max-h-60 overflow-y-auto">
             <ul className="py-1">
-              {soundOptions.map(option => (
-                <li key={option}>
-                  <button
-                    onClick={() => {
-                      onUpdateSoundType(line.id, option === '清除' ? '' : option);
-                      setIsSoundTypeDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-600 ${
-                        (line.soundType === option || ((!line.soundType || line.soundType === '') && option === '清除'))
-                        ? 'bg-sky-600 text-white' : 'text-slate-200'}`}
+              {soundOptions.map(option => {
+                const isCustom = !defaultSoundOptions.includes(option) && option !== '自定义';
+                const isSelected = (line.soundType === option || ((!line.soundType || line.soundType === '') && option === '清除'));
+
+                const handleOptionClick = () => {
+                  if (option === '自定义') {
+                    handleAddCustom();
+                  } else {
+                    onUpdateSoundType(line.id, option === '清除' ? '' : option);
+                    setIsSoundTypeDropdownOpen(false);
+                  }
+                };
+
+                const handleDeleteClick = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  if (window.confirm(`确定要删除自定义音效 "${option}" 吗？所有使用此音效的行将被重置。`)) {
+                    onDeleteCustomSoundType(option);
+                  }
+                };
+
+                return (
+                  <li key={option}
+                      onClick={handleOptionClick}
+                      className={`flex items-center justify-between px-3 py-2 text-sm cursor-pointer group ${isSelected ? 'bg-sky-600 text-white' : 'text-slate-200 hover:bg-slate-700'}`}
                   >
-                    {option}
-                  </button>
-                </li>
-              ))}
+                    <span>{option}</span>
+                    {isCustom && (
+                      <button
+                        onClick={handleDeleteClick}
+                        className="p-1 -mr-2 rounded-full text-slate-500 group-hover:text-red-400 hover:bg-slate-600"
+                        title={`删除 "${option}"`}
+                      >
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}

@@ -96,6 +96,11 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     }
   };
 
+  const { addCustomSoundType, deleteCustomSoundType } = useStore(state => ({
+    addCustomSoundType: state.addCustomSoundType,
+    deleteCustomSoundType: state.deleteCustomSoundType,
+  }));
+
 
   const setMultiSelectedChapterIdsAfterProcessing = useCallback((ids: string[]) => {
       setMultiSelectedChapterIds(ids);
@@ -225,8 +230,7 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
             let errorMessage = "读取或解析文件时出错: 未知错误";
             if (error instanceof Error) {
                 errorMessage = `读取或解析文件时出错: ${error.message}`;
-                // FIX: Added a check to ensure error.message is a string before calling toLowerCase, resolving the 'unknown' type error.
-                if (typeof error.message === 'string' && error.message.toLowerCase().includes('central directory')) {
+                if (error.message.toLowerCase().includes('central directory')) {
                     errorMessage = '无法读取该 .docx 文件。文件可能已损坏，或者它是一个旧版 .doc 文件但扩展名被错误地改成了 .docx。请尝试在Word中打开并重新另存为 .docx 格式。';
                 }
             }
@@ -377,6 +381,14 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
       setMultiSelectedChapterIds([]);
   };
 
+  const handleAddCustomSoundType = useCallback((soundType: string) => {
+    if (projectId) addCustomSoundType(projectId, soundType);
+  }, [projectId, addCustomSoundType]);
+
+  const handleDeleteCustomSoundType = useCallback((soundType: string) => {
+    if (projectId) deleteCustomSoundType(projectId, soundType);
+  }, [projectId, deleteCustomSoundType]);
+
   const contextValue = useMemo(() => ({
     ...coreLogic,
     characters: projectCharacters,
@@ -402,11 +414,14 @@ const EditorPage: React.FC<EditorPageProps> = (props) => {
     openCharacterEditModal: onOpenCharacterAndCvStyleModal,
     cvFilter: coreLogic.cvFilter,
     setCvFilter: coreLogic.setCvFilter,
+    addCustomSoundType: handleAddCustomSoundType,
+    deleteCustomSoundType: handleDeleteCustomSoundType,
   }), [
     coreLogic, projectCharacters, allCvNames, cvStyles, applyUndoableProjectUpdate, onDeleteChapters,
     isLoadingAiAnnotation, isLoadingManualParse, isLoadingImportAnnotation,
     handleRunAiAnnotationForChapters, handleManualParseChapters, handleOpenImportModalTrigger,
-    handleOpenCharacterSidePanel, onOpenCharacterAndCvStyleModal, handleOpenScriptImport
+    handleOpenCharacterSidePanel, onOpenCharacterAndCvStyleModal, handleOpenScriptImport,
+    handleAddCustomSoundType, handleDeleteCustomSoundType
   ]);
 
   if (coreLogic.isLoadingProject) {

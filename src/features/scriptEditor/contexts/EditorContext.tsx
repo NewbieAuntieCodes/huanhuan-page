@@ -48,6 +48,8 @@ export interface EditorContextType {
   // These will now call the onOpenCharacterAndCvStyleModal prop from App.tsx
   openCvModal: (character: Character | null) => void; 
   openCharacterEditModal: (character: Character | null) => void;
+  addCustomSoundType: (soundType: string) => void;
+  deleteCustomSoundType: (soundType: string) => void;
 }
 
 export const EditorContext = createContext<EditorContextType | undefined>(undefined);

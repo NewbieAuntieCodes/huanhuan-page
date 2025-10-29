@@ -53,6 +53,7 @@ export interface Project {
   collaborators?: Collaborator[];
   lastModified: number; // Timestamp for sorting
   cvStyles?: CVStylesMap;
+  customSoundTypes?: string[];
 }
 
 // For Gemini service response parsing

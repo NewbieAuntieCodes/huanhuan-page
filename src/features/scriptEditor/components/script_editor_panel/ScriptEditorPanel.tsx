@@ -44,6 +44,8 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
     setFocusedScriptLineId,
     isLoadingAiAnnotation, // From context, for chapter processing
     isLoadingManualParse,  // From context, for chapter processing
+    addCustomSoundType,
+    deleteCustomSoundType,
   } = useEditorContext();
 
   const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false);
@@ -262,6 +264,9 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               isFocusedForSplit={focusedScriptLineId === line.id} // From context
               onUpdateSoundType={(lineId, soundType) => onUpdateSoundType(selectedChapter.id, lineId, soundType)}
               onFocusChange={setFocusedScriptLineId} // From context
+              customSoundTypes={currentProject?.customSoundTypes || []}
+              onAddCustomSoundType={addCustomSoundType}
+              onDeleteCustomSoundType={deleteCustomSoundType}
             />
           ))
         ) : (

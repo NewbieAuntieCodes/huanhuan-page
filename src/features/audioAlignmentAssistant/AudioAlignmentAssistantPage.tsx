@@ -221,7 +221,8 @@ const AudioAlignmentAssistantPage: React.FC = () => {
                 finalStatus.chapters[chapter.id] = true;
                 return;
             }
-            const charIdsInChapter = new Set(chapter.scriptLines.map(l => l.characterId).filter((id): id is string => !!id));
+            // FIX: Used a type guard `(id): id is string => !!id` instead of `filter(Boolean) as string[]` for safer type inference, ensuring `charId` is correctly typed as a string.
+            const charIdsInChapter = new Set(chapter.scriptLines.map(l => l.characterId).filter(Boolean) as string[]);
             if (charIdsInChapter.size === 0) {
                 finalStatus.chapters[chapter.id] = true;
                 return;
@@ -253,7 +254,8 @@ const AudioAlignmentAssistantPage: React.FC = () => {
 
             if (chapter && chapterNum !== null) {
                 const relevantFiles = fileCoverage.get(chapterNum) || [];
-                const charIdsInChapter = new Set(chapter.scriptLines.map(l => l.characterId).filter((id): id is string => !!id));
+                // FIX: Used a type guard `(id): id is string => !!id` instead of `filter(Boolean) as string[]` for safer type inference, ensuring `charId` is correctly typed as a string.
+                const charIdsInChapter = new Set(chapter.scriptLines.map(l => l.characterId).filter(Boolean) as string[]);
 
                 charIdsInChapter.forEach(charId => {
                     const character = projectCharacters.find(c => c.id === charId);
