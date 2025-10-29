@@ -1,3 +1,4 @@
+
 import { useCallback } from 'react';
 import { Project, Character, ScriptLine } from '../../../types';
 
@@ -63,12 +64,13 @@ export const useScriptLineEditor = (
             const isOriginallyCharacter = originalCharacter && originalCharacter.name !== 'Narrator';
             if (isOriginallyCharacter) {
                  const trimmedText = convertedText.trim();
-                 // If it's quoted, change to single quotes.
-                 if (trimmedText.startsWith('“') && trimmedText.endsWith('”')) {
+                 // If it was quoted dialogue, just extract the content as narration.
+                 if ((trimmedText.startsWith('“') && trimmedText.endsWith('”')) || (trimmedText.startsWith('「') && trimmedText.endsWith('」'))) {
                     const content = trimmedText.substring(1, trimmedText.length - 1);
                     const before = convertedText.substring(0, convertedText.indexOf(trimmedText));
                     const after = convertedText.substring(convertedText.indexOf(trimmedText) + trimmedText.length);
-                    convertedText = before + `‘${content}’` + after;
+                    // Remove quotes, don't replace with single quotes. This allows for clean merging.
+                    convertedText = before + content + after; 
                 }
             }
 

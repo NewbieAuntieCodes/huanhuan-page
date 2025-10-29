@@ -217,6 +217,7 @@ const VoiceLibraryPage: React.FC = () => {
               <VoiceLibraryRow
                 key={row.id}
                 row={{ ...row, audioUrl: generatedAudioUrls[row.id] || null }}
+                // FIX: Pass null instead of an empty object when a character is not found.
                 character={characterForRow || null}
                 isBatchGenerating={isGenerating}
                 onTextChange={(text) => handleTextChange(row.id, text)}
