@@ -188,7 +188,7 @@ export const useVoiceLibrary = () => {
         }
         const chapterMatchesFilter = (chapter: Chapter): boolean => {
             const filter = chapterFilter.trim();
-            if (!filter) return true;
+            if (!filter) return false;
             const rangeMatch = filter.match(/^(\d+)-(\d+)$/);
             if (rangeMatch) {
                 const start = parseInt(rangeMatch[1], 10), end = parseInt(rangeMatch[2], 10);
